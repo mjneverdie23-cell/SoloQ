@@ -68,7 +68,6 @@ class Hub:
     transfer_note: str | None      # operational caveats, free text
     disembark_minutes: int         # wheels-down to landside door, excl. immigration
     immigration_minutes: int       # only applied when this is an entry point
-    exit_control_minutes: int      # departure passport control, 0 if none
     recheck_buffer_minutes: int    # required presence before onward departure
     has_left_luggage: bool
     activity_density: float        # 0.0-1.0, hand-scored
@@ -82,7 +81,7 @@ class EntryRule:
     max_stay_days: int | None
     passport_validity_days: int    # required beyond arrival date
     notes: str
-    verified_on: date              # HARD REQUIREMENT — see §7
+    verified_on: date | None       # null until checked — gates rendering, see §7
 
 # --- Fare data (fetched) ---
 
@@ -140,7 +139,15 @@ negative the itinerary is honestly worse and we say so.
 ### 5.1 Usable time
 
 ```python
-def usable_minutes(lay: Layover, hub: Hub, itin: Itinerary) -> int:
+def recheck_buffer(hub: Hub, onward: Segment) -> int:
+    # A Schengen hub's 120 assumes an intra-Schengen departure. Leaving the zone
+    # means full exit control — which is what the non-Schengen 180 already covers.
+    if hub.is_schengen and not is_schengen_airport(onward.destination):
+        return 180
+    return hub.recheck_buffer_minutes
+
+
+def usable_minutes(lay: Layover, hub: Hub, onward: Segment) -> int:
     m = lay.gross_minutes
     m -= hub.disembark_minutes
     if lay.is_entry_point:
@@ -148,11 +155,21 @@ def usable_minutes(lay: Layover, hub: Hub, itin: Itinerary) -> int:
     if lay.requires_bag_reclaim:
         m -= 30
     m -= hub.transfer_minutes * 2
-    m -= hub.recheck_buffer_minutes
-    m -= hub.exit_control_minutes
+    m -= recheck_buffer(hub, onward)
     m -= SAFETY_MARGIN            # 45
     return max(0, m)
 ```
+
+There is no `exit_control_minutes` deduction. Departure passport control is real
+and it does cost ~25 minutes at DXB — but it is already inside
+`recheck_buffer_minutes`. The 180 is the airline's own "be at the airport three
+hours before an international departure", which covers check-in, bag drop,
+security, exit control and the walk to the gate. Deducting it again counts the
+same queue twice. The 180-vs-120 split between non-Schengen and Schengen hubs
+encodes exactly that difference, which is why `recheck_buffer()` returns 180 for
+a Schengen hub whose onward leg leaves the zone: `OSL → WAW → BKK` faces full
+Schengen exit control at Warsaw and must not be costed at 120. It mirrors the
+entry-point rule in §5.2 — the direction of travel decides, not the hub.
 
 `SAFETY_MARGIN = 45`. Be conservative. Being wrong here means someone misses a
 flight.
@@ -198,7 +215,7 @@ example, DXB, 12h gross, single ticket, entry point:
 
 ```
 720 - 25 (disembark) - 35 (immigration) - 60 (transfer x2)
-    - 180 (recheck) - 0 (exit control) - 45 (margin) = 375 → HALF_DAY
+    - 180 (recheck) - 45 (margin) = 375 → HALF_DAY
 ```
 
 Six and a quarter hours. This is the headline finding and the product must never
@@ -287,6 +304,53 @@ Entry rules and transfer times go stale and being wrong is a missed flight.
 
 ## 8. Fare data
 
+### 8.1 Source abstraction
+
+Fares arrive through one interface with two implementations behind it:
+
+```python
+class FareSource(Protocol):
+    def search(self, origin: str, dest: str, depart: date) -> list[Itinerary]: ...
+
+class FixtureSource:   # reads fixtures/itineraries/*.json
+class AmadeusSource:   # step 8
+```
+
+Selected by `FARE_SOURCE=fixture|amadeus`, defaulting to `fixture`. The scoring
+layer must not be able to tell which one it got: fixtures are the same parsed
+`Itinerary` shape, not raw Amadeus JSON. Steps 5–7 then need no network access
+and no API quota, so there is a demoable product before a single Amadeus call is
+spent.
+
+### 8.2 Fixtures
+
+Hand-written, not generated. Random data proves nothing. Each file targets a
+specific branch of the scoring logic:
+
+| Fixture | Exercises |
+|---|---|
+| `dxb_12h_halfday` | §5.3 worked example → 375, `HALF_DAY` |
+| `waw_inbound_bkk_osl` | Schengen entry point, no bag reclaim, 120 buffer |
+| `waw_outbound_osl_bkk` | Not an entry point, but 180 buffer — the §5.1 rule |
+| `ist_night_2200_1000` | Daylight gate → not `HALF_DAY` despite 12h gross |
+| `doh_150min` | Hard gate → score 0, `blocked_reason` set |
+| `rix_22h_overnight` | `OVERNIGHT` band |
+| `dxb_selftransfer_bags` | Bag reclaim penalty, `is_single_ticket: False` |
+| `ist_negative_saving` | Plan cost > fare saving → `net_saving_eur < 0` |
+
+Each fixture carries its own baseline fare, so the `Comparison` calculation works
+end to end. Each also carries an `expected` block — band, usable minutes, score —
+and the suite asserts computed output against it. That makes the fixtures the
+regression suite, not just demo dressing.
+
+### 8.3 Demo mode must be visible
+
+When `FARE_SOURCE=fixture`, every page renders a persistent banner: **"Demo data
+— these fares are not real."** Not a footnote, not a tooltip. Someone will
+screenshot this and the fake prices must not travel without the label.
+
+### 8.4 Amadeus
+
 **Source:** Amadeus Self-Service, `GET /v2/shopping/flight-offers`. It returns
 `itineraries[].segments[]` with `departure.at` / `arrival.at`, which is everything
 the layover computation needs. No scraping.
@@ -341,17 +405,20 @@ are testable; generated ones are not.
 4. Scoring + hard gates → verify: a 150-minute layover scores 0 with
    blocked_reason set; a visa_required rule scores 0 regardless of duration.
 
-5. Amadeus client with call counter → verify: hits the test endpoint, parses a
-   real response into Itinerary, counter increments, refuses to fire at quota.
+5. FareSource protocol + FixtureSource + the 8 fixtures of §8.2 → verify: each
+   fixture's `expected` block matches computed output.
 
-6. Nightly batch writing to SQLite → verify: one full run completes under the
+6. Comparison calculation → verify: ist_negative_saving yields
+   net_saving_eur < 0, and the UI says so plainly.
+
+7. Jinja result page → verify: renders all 8 fixtures without error, each with
+   band, usable hours, return-by time, plan, comparison and the §8.3 banner.
+
+8. AmadeusSource + call counter → verify: parses a live response into the same
+   Itinerary shape, counter increments, refuses to fire at quota.
+
+9. Nightly batch writing to SQLite → verify: one full run completes under the
    call budget and populates results.
-
-7. Comparison calculation → verify: net_saving_eur goes negative when plan cost
-   exceeds fare saving, and the UI says so plainly.
-
-8. Jinja result page → verify: renders one itinerary with band, usable hours,
-   return-by time, plan, and comparison.
 ```
 
 Do not proceed to step N+1 until step N's verification passes.
@@ -375,10 +442,12 @@ Building any of these is a spec violation, not initiative:
 - The `last_onward_of_day` penalty removed from §5.1 and §5.5 — v1, and only
   once a hub schedule source exists to compute it from. Do not infer it from a
   `flight-offers` response.
+- Randomly generated fixtures, a fixture-generation script, or an admin UI for
+  editing them. Eight hand-written JSON files, committed.
 
 ---
 
-## 12. Open questions to resolve before step 5
+## 12. Open questions to resolve before step 8
 
 1. Does Amadeus's terms of service permit displaying fares alongside third-party
    activity recommendations? Read them; this affects v1 monetisation.

@@ -17,7 +17,6 @@
       "transfer_note": "M11 to Gayrettepe, change to M2 for Taksim/Sisli. New IST airport is ~40 km out — slowest transfer of the six.",
       "disembark_minutes": 25,
       "immigration_minutes": 30,
-      "exit_control_minutes": 25,
       "recheck_buffer_minutes": 180,
       "has_left_luggage": true,
       "activity_density": 0.9
@@ -33,7 +32,6 @@
       "transfer_note": "Doha Metro Red Line to Msheireb. Cheapest transfer in the set.",
       "disembark_minutes": 20,
       "immigration_minutes": 25,
-      "exit_control_minutes": 20,
       "recheck_buffer_minutes": 180,
       "has_left_luggage": true,
       "activity_density": 0.6
@@ -49,7 +47,6 @@
       "transfer_note": "Red Line direct from T1 and T3. Note Friday morning reduced service.",
       "disembark_minutes": 25,
       "immigration_minutes": 35,
-      "exit_control_minutes": 25,
       "recheck_buffer_minutes": 180,
       "has_left_luggage": true,
       "activity_density": 0.8
@@ -65,7 +62,6 @@
       "transfer_note": "Bus A1 to city centre. No metro. Taxi materially faster but ~20 EUR.",
       "disembark_minutes": 25,
       "immigration_minutes": 35,
-      "exit_control_minutes": 25,
       "recheck_buffer_minutes": 180,
       "has_left_luggage": true,
       "activity_density": 0.5
@@ -81,7 +77,6 @@
       "transfer_note": "S2/S3 train or bus 175 to Centrum. Chopin airport is close in.",
       "disembark_minutes": 15,
       "immigration_minutes": 30,
-      "exit_control_minutes": 0,
       "recheck_buffer_minutes": 120,
       "has_left_luggage": true,
       "activity_density": 0.7
@@ -97,7 +92,6 @@
       "transfer_note": "Bus 22 to Old Town. Small airport, fast on foot.",
       "disembark_minutes": 12,
       "immigration_minutes": 30,
-      "exit_control_minutes": 0,
       "recheck_buffer_minutes": 120,
       "has_left_luggage": true,
       "activity_density": 0.6

@@ -18,7 +18,6 @@ CREATE TABLE IF NOT EXISTS hub (
     transfer_note           TEXT,
     disembark_minutes       INTEGER NOT NULL,
     immigration_minutes     INTEGER NOT NULL,
-    exit_control_minutes    INTEGER NOT NULL,
     recheck_buffer_minutes  INTEGER NOT NULL,
     has_left_luggage        INTEGER NOT NULL,
     activity_density        REAL    NOT NULL

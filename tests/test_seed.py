@@ -65,12 +65,13 @@ def test_durations_that_must_not_be_zero(conn):
             assert hub[column] > 0, f"{hub['iata']}.{column} is {hub[column]}"
 
 
-def test_exit_control_minutes_may_be_zero(conn):
-    exit_control = {hub["iata"]: hub["exit_control_minutes"] for hub in rows(conn, "hub")}
-    assert all(minutes >= 0 for minutes in exit_control.values())
-    # WAW and RIX are Schengen — no departure passport control.
-    assert exit_control["WAW"] == 0
-    assert exit_control["RIX"] == 0
+def test_schengen_hubs_carry_the_shorter_buffer(conn):
+    # The 180/120 split is what encodes exit control (SPEC.md §5.1), so it is
+    # the only place that difference survives now the field is gone.
+    buffers = {hub["iata"]: hub["recheck_buffer_minutes"] for hub in rows(conn, "hub")}
+    assert buffers["WAW"] == 120
+    assert buffers["RIX"] == 120
+    assert all(buffers[iata] == 180 for iata in ("IST", "DOH", "DXB", "AUH"))
 
 
 def test_hub_flags_and_density_in_range(conn):

@@ -19,7 +19,6 @@ HUB_COLUMNS = (
     "transfer_note",
     "disembark_minutes",
     "immigration_minutes",
-    "exit_control_minutes",
     "recheck_buffer_minutes",
     "has_left_luggage",
     "activity_density",
