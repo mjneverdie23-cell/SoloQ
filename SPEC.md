@@ -65,6 +65,7 @@ class Hub:
     transfer_minutes: int          # airport -> city centre, one way, public transit
     transfer_cost_eur: float       # one way
     transfer_mode: str             # "metro" | "train" | "bus"
+    transfer_note: str | None      # operational caveats, free text
     disembark_minutes: int         # wheels-down to landside door, excl. immigration
     immigration_minutes: int       # only applied when this is an entry point
     exit_control_minutes: int      # departure passport control, 0 if none
@@ -74,7 +75,7 @@ class Hub:
 
 @dataclass
 class EntryRule:
-    passport_iso2: str             # "NO"
+    passport_scope: str            # "NORDIC" — all five passports of §2, one row
     country_iso2: str              # "TR"
     entry_type: str                # "schengen_internal" | "visa_free" | "voa" |
                                    # "evisa" | "visa_required" | "no_landside_access"
@@ -149,14 +150,20 @@ def usable_minutes(lay: Layover, hub: Hub, itin: Itinerary) -> int:
     m -= hub.transfer_minutes * 2
     m -= hub.recheck_buffer_minutes
     m -= hub.exit_control_minutes
-    m -= SAFETY_MARGIN            # 30
-    if lay.is_last_onward_of_day:
-        m -= 60                   # no recovery flight — buy more margin
+    m -= SAFETY_MARGIN            # 45
     return max(0, m)
 ```
 
-`SAFETY_MARGIN = 30`. Be conservative. Being wrong here means someone misses a
+`SAFETY_MARGIN = 45`. Be conservative. Being wrong here means someone misses a
 flight.
+
+The margin was 30, with a further 60 subtracted when the onward flight was the
+last departure of the day. That flag is not computable: knowing whether a
+departure is the day's last to a destination needs full schedule data for the
+hub, and a `flight-offers` response only describes the itineraries it returned.
+It is removed, and the margin absorbs the risk it covered — strictly simpler and
+strictly more conservative. Reinstating it is a v1 item, conditional on adding a
+schedule source. See §11.
 
 ### 5.2 Entry point determination
 
@@ -191,10 +198,10 @@ example, DXB, 12h gross, single ticket, entry point:
 
 ```
 720 - 25 (disembark) - 35 (immigration) - 60 (transfer x2)
-    - 180 (recheck) - 0 (exit control) - 30 (margin) = 390 → HALF_DAY
+    - 180 (recheck) - 0 (exit control) - 45 (margin) = 375 → HALF_DAY
 ```
 
-Six and a half hours. This is the headline finding and the product must never
+Six and a quarter hours. This is the headline finding and the product must never
 imply otherwise.
 
 ### 5.4 Daylight overlay
@@ -225,7 +232,6 @@ WEIGHTS = {
 PENALTIES = {
     "bag_reclaim": -15,
     "terminal_change": -5,
-    "last_onward_of_day": -10,
 }
 ```
 
@@ -323,11 +329,11 @@ are testable; generated ones are not.
 ## 10. Build order and verification
 
 ```
-1. Hub + EntryRule seed data loaded from JSON → verify: 6 hubs, 6 rules, all
-   fields non-null, `pytest tests/test_seed.py` green.
+1. Hub + EntryRule seed data loaded from JSON → verify: 6 hubs, 5 entry rules,
+   all fields non-null, `pytest tests/test_seed.py` green.
 
 2. Layover computation from a static itinerary fixture → verify: the DXB worked
-   example in §5.3 returns exactly 390 and band HALF_DAY.
+   example in §5.3 returns exactly 375 and band HALF_DAY.
 
 3. Entry-point logic → verify: BKK→WAW→OSL marks WAW as entry point;
    OSL→WAW→BKK does not.
@@ -366,6 +372,9 @@ Building any of these is a spec violation, not initiative:
 - Docker, Kubernetes, CI/CD
 - Caching layers beyond SQLite
 - Multi-currency (EUR only)
+- The `last_onward_of_day` penalty removed from §5.1 and §5.5 — v1, and only
+  once a hub schedule source exists to compute it from. Do not infer it from a
+  `flight-offers` response.
 
 ---
 

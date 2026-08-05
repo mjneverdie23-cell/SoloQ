@@ -91,7 +91,7 @@ proven otherwise.
 
 ```
 test_dxb_12h_halfday        DXB, 12h gross, single ticket, entry point
-                            → usable == 390, band == "HALF_DAY"
+                            → usable == 375, band == "HALF_DAY"
 
 test_schengen_entry_inbound BKK→WAW→OSL → WAW.is_entry_point == True
 test_schengen_entry_outbound OSL→WAW→BKK → WAW.is_entry_point == False
