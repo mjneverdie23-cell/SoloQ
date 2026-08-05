@@ -254,6 +254,13 @@ dataset — surface it prominently.
 
 §5.4 can override any of these with a sixth value, `OVERNIGHT_NIGHT_ARRIVAL`.
 
+**`OVERNIGHT` needs almost a full day of gross layover.** The floor is 1080
+*usable* minutes and every hub spends its deductions first, so the gross figure
+required is 1080 plus that hub's deductions: RIX spends 257, so `OVERNIGHT`
+starts at 22h17m; DXB spends 345, so it starts at 23h45m. A band named for a
+night that a 22-hour layover does not reach is exactly the kind of thing to
+write down before someone designs a booking flow around the word.
+
 **A 12-hour layover typically lands in `HALF_DAY`, not `FULL_DAY`.** Worked
 example, DXB, 12h gross, single ticket, entry point:
 
@@ -323,8 +330,21 @@ just do not calibrate the other weights against a signal that does not move.
 Score is forced to 0 and every failing gate is appended to `blocked_reasons`:
 
 1. `entry_type` is `visa_required` or `no_landside_access` for this passport.
-2. `usable_minutes < 180`.
+2. `band == "NO_EXIT"`.
 3. Self-transfer with checked bags and `hub.has_left_luggage is False`.
+
+Gate 2 reads the band. `usable_minutes < 180` was only ever a proxy for
+`NO_EXIT`: §5.3 already turns that duration into `NO_EXIT`, so the band
+subsumes the old condition and picks up the open-hours case the proxy missed —
+which is how a 22:00 arrival at IST scored 47 while the band knew nothing was
+open. Two code paths deciding "is this usable" from the same inputs is hard
+rule 7's family. The band computes first; it reads `usable_minutes` and
+`open_hours_minutes`, neither of which reads a gate, so there is no cycle.
+
+`NO_EXIT` has two causes and they are different facts, so both are named when
+both hold: "layover shorter than 3 usable hours" and "nothing open during the
+usable window". `OVERNIGHT_NIGHT_ARRIVAL` also has no open hours and is
+deliberately **not** gated — a bed is still a plan.
 
 **Collect all of them; never short-circuit.** Someone told only "layover too
 short" will go and find a longer one, then hit the visa wall they were never
@@ -332,6 +352,12 @@ shown. That is why `blocked_reasons` is a list.
 
 Passport validity is **not** a gate. We cannot check it, so zeroing a score on
 it would imply that we had. It is a user-confirmed checkbox at step 8.
+
+**A blocked layover is not a dropped itinerary.** The flight is still real and
+still cheap; it is the city trip that is blocked. The fare saving and the
+`Comparison` still render, and §5.3's `NO_EXIT` plan — lounge, rest zone — is
+still the output. Step 8 must group these under "no city trip possible" rather
+than filtering them out of the results.
 
 ### 5.7 v0 derivation rules
 

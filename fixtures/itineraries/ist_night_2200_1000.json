@@ -1,6 +1,6 @@
 {
   "id": "ist_night_2200_1000",
-  "note": "Twelve hours that are worth nothing. Duration says QUICK; \u00a75.4 says NO_EXIT.",
+  "note": "Twelve hours that are worth nothing. Duration says QUICK; the open-hours overlay says NO_EXIT, and gate 2 reads the band.",
   "price_eur": 455.0,
   "baseline_price_eur": 612.0,
   "layover_plan_cost_eur": 0.0,
@@ -44,7 +44,9 @@
     "window_start_local": "2026-09-01T23:55:00+03:00",
     "window_end_local": "2026-09-02T05:15:00+03:00",
     "band": "NO_EXIT",
-    "score": 47,
-    "blocked_reasons": []
+    "score": 0,
+    "blocked_reasons": [
+      "nothing open during the usable window"
+    ]
   }
 }

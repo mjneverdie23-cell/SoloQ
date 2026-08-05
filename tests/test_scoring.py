@@ -69,9 +69,9 @@ def layover_at(hub_iata, tz, hour, gross, *, entry=True, bags=False, terminal=Fa
     )
 
 
-def assess_case(seeded, lay, hub_iata, *, itin=None, today=TODAY):
+def assess_case(seeded, lay, hub_iata, *, itin=None, today=TODAY, onward_to="BKK"):
     hubs, airports, rules, schengen = seeded
-    onward = segment(hub_iata, "BKK")
+    onward = segment(hub_iata, onward_to)
     usable = usable_minutes(lay, hubs[hub_iata], onward, schengen)
     start, end = city_window(lay, hubs[hub_iata], onward, schengen)
     return assess(
@@ -148,7 +148,7 @@ def test_short_layover_gate(seeded):
     lay = layover_at("DOH", "Asia/Qatar", 8, 150)
     result = assess_case(seeded, lay, "DOH")
     assert result.score == 0
-    assert any("usable minutes" in r for r in result.blocked_reasons)
+    assert any("shorter than 3 usable hours" in r for r in result.blocked_reasons)
 
 
 def test_visa_required_gate_ignores_duration(seeded):
@@ -214,9 +214,10 @@ def test_gates_are_collected_not_short_circuited(seeded):
         open_hours_minutes(start, end),
         TODAY,
     )
-    assert len(result.blocked_reasons) == 2
+    assert len(result.blocked_reasons) == 3
     assert any("visa_required" in r for r in result.blocked_reasons)
-    assert any("usable minutes" in r for r in result.blocked_reasons)
+    assert any("shorter than 3 usable hours" in r for r in result.blocked_reasons)
+    assert any("nothing open" in r for r in result.blocked_reasons)
 
 
 def test_passport_validity_is_not_a_gate(seeded):
@@ -305,3 +306,61 @@ def test_assessment_is_recommendable_only_when_clean():
     assert Assessment(80, [], []).is_recommendable is True
     assert Assessment(0, ["blocked"], []).is_recommendable is False
     assert Assessment(80, [], ["stale"]).is_recommendable is False
+
+
+def test_night_layover_is_gated_by_the_band_not_by_duration(seeded):
+    """ist_night_2200_1000: 320 usable minutes, so `usable < 180` never fired.
+
+    Duration alone calls this QUICK and it scored 47 under the old proxy gate.
+    The band knew better, and gate 2 now reads the band.
+    """
+    lay = layover_at("IST", "Europe/Istanbul", 22, 720)
+    result = assess_case(seeded, lay, "IST")
+    assert result.score == 0
+    assert result.blocked_reasons == ["nothing open during the usable window"]
+
+
+def test_a_bed_is_still_a_plan(seeded):
+    """OVERNIGHT_NIGHT_ARRIVAL also has no open hours and is deliberately not gated.
+
+    The same 13-hour night at RIX falls either side of the line depending on
+    where it goes next. Onward to OSL keeps the 120 buffer and leaves 523
+    usable — over the 480 floor, so it is a hotel. Onward to BKK costs the full
+    180 (§5.1) and leaves 463, which is under the floor and genuinely blocked.
+    Sixty minutes of Schengen exit control is the whole difference.
+    """
+    from app.layover import band
+
+    lay = layover_at("RIX", "Europe/Riga", 20, 780)
+    hubs, _, _, schengen = seeded
+
+    onward = segment("RIX", "OSL")
+    usable = usable_minutes(lay, hubs["RIX"], onward, schengen)
+    start, end = city_window(lay, hubs["RIX"], onward, schengen)
+    assert usable == 523
+    assert open_hours_minutes(start, end) == 0
+    assert band(usable, open_hours_minutes(start, end)) == "OVERNIGHT_NIGHT_ARRIVAL"
+    assert assess_case(seeded, lay, "RIX", onward_to="OSL").blocked_reasons == []
+
+    leaving = segment("RIX", "BKK")
+    assert usable_minutes(lay, hubs["RIX"], leaving, schengen) == 463
+    assert assess_case(seeded, lay, "RIX", onward_to="BKK").blocked_reasons == [
+        "nothing open during the usable window"
+    ]
+
+
+def test_overnight_band_needs_almost_a_full_day(seeded):
+    """A band named "overnight" that a 22-hour layover does not reach.
+
+    Worth writing down before anyone designs a booking flow around the name.
+    """
+    hubs, _, _, _ = seeded
+    for iata, deductions, gross_needed in (("RIX", 257, 1337), ("DXB", 345, 1425)):
+        hub = hubs[iata]
+        assert (
+            hub.disembark_minutes + hub.immigration_minutes
+            + hub.transfer_minutes * 2 + hub.recheck_buffer_minutes + 45
+        ) == deductions
+        assert 1080 + deductions == gross_needed
+    assert 1337 == 22 * 60 + 17    # RIX: 22h17m
+    assert 1425 == 23 * 60 + 45    # DXB: 23h45m

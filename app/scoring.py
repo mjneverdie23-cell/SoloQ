@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from datetime import date
 
+from app.layover import OPEN_HOURS_FLOOR, band, duration_band
 from app.models import Airport, EntryRule, Hub, Itinerary, Layover
 
 WEIGHTS = {
@@ -35,7 +36,6 @@ ENTRY_EASE = {
 USABLE_NORMAL = 720
 OPEN_HOURS_NORMAL = 480
 ACCESS_NORMAL = 90
-MINIMUM_USABLE = 180
 BLOCKING_ENTRY_TYPES = ("visa_required", "no_landside_access")
 STALENESS_DAYS = 180
 
@@ -83,18 +83,34 @@ def stale_reasons(
 
 
 def blocked_reasons(
-    lay: Layover, hub: Hub, entry_rule: EntryRule, itin: Itinerary, usable: int
+    lay: Layover,
+    hub: Hub,
+    entry_rule: EntryRule,
+    itin: Itinerary,
+    usable: int,
+    open_hours: int,
 ) -> list[str]:
     """§5.6. Every failing gate, never just the first.
 
     Someone told only "layover too short" will go and find a longer one, then
     hit the visa wall they were never shown.
+
+    Gate 2 reads the band rather than re-deciding usability from usable_minutes.
+    `usable < 180` was only ever a proxy for NO_EXIT and it missed the
+    open-hours case entirely. The band is the single authority (hard rule 7);
+    it computes first, and nothing it reads depends on a gate.
     """
     reasons = []
     if entry_rule.entry_type in BLOCKING_ENTRY_TYPES:
         reasons.append(f"entry type {entry_rule.entry_type} — cannot go landside")
-    if usable < MINIMUM_USABLE:
-        reasons.append(f"only {usable} usable minutes, under the {MINIMUM_USABLE} floor")
+    if band(usable, open_hours) == "NO_EXIT":
+        # NO_EXIT has two causes and they are different facts, so both are named
+        # when both hold. A bed is still a plan, so OVERNIGHT_NIGHT_ARRIVAL —
+        # which also has no open hours — is deliberately not a gate.
+        if duration_band(usable) == "NO_EXIT":
+            reasons.append("layover shorter than 3 usable hours")
+        if open_hours < OPEN_HOURS_FLOOR:
+            reasons.append("nothing open during the usable window")
     if not itin.is_single_ticket and lay.requires_bag_reclaim and not hub.has_left_luggage:
         reasons.append("self-transfer with bags to reclaim and no left luggage at the hub")
     return reasons
@@ -111,7 +127,7 @@ def assess(
     today: date,
 ) -> Assessment:
     """§5.5 weighted score, zeroed by any §5.6 gate, plus the §7 staleness flags."""
-    blocked = blocked_reasons(lay, hub, entry_rule, itin, usable)
+    blocked = blocked_reasons(lay, hub, entry_rule, itin, usable, open_hours)
     stale = stale_reasons(hub, airport, entry_rule, today)
     if blocked:
         return Assessment(0, blocked, stale)

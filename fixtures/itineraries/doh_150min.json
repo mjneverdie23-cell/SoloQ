@@ -46,7 +46,8 @@
     "band": "NO_EXIT",
     "score": 0,
     "blocked_reasons": [
-      "only 0 usable minutes, under the 180 floor"
+      "layover shorter than 3 usable hours",
+      "nothing open during the usable window"
     ]
   }
 }
