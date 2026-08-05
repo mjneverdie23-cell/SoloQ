@@ -5,7 +5,7 @@ import pytest
 
 from app.db import connect
 from app.geo import load_schengen_airports
-from app.layover import band, recheck_buffer, usable_minutes
+from app.layover import band, is_entry_point, recheck_buffer, usable_minutes
 from app.models import Hub, Layover, Segment
 from app.seed import load_seed
 
@@ -45,6 +45,20 @@ def onward_to(destination: str) -> Segment:
     )
 
 
+def arriving_from(origin: str) -> Segment:
+    """The inbound leg into the hub. Only `origin` is read by §5.2."""
+    arrival = datetime(2026, 9, 1, 8, 0, tzinfo=ZoneInfo("Europe/Warsaw"))
+    return Segment(
+        carrier="LO",
+        flight_number="LO78",
+        origin=origin,
+        destination="WAW",
+        departure_local=arrival - timedelta(hours=10),
+        arrival_local=arrival,
+        is_international=True,
+    )
+
+
 def layover_at(hub_iata, tz, arrive_hour, gross_minutes, *, is_entry_point, requires_bag_reclaim):
     """Build a layover from tz-aware endpoints, deriving gross_minutes from them."""
     arrival = datetime(2026, 9, 1, arrive_hour, 0, tzinfo=ZoneInfo(tz))
@@ -69,6 +83,39 @@ def test_dxb_12h_halfday(hubs, schengen):
 
     usable = usable_minutes(lay, hubs["DXB"], onward_to("BKK"), schengen)
     assert usable == 375
+    assert band(usable) == "HALF_DAY"
+
+
+def test_schengen_entry_inbound(hubs, schengen):
+    # BKK -> WAW -> OSL: Warsaw is where the customs union is entered, so
+    # immigration happens there and not at Oslo.
+    assert is_entry_point(hubs["WAW"], arriving_from("BKK"), schengen) is True
+
+
+def test_schengen_entry_outbound(hubs, schengen):
+    # OSL -> WAW -> BKK: already inside Schengen, so Warsaw is not an entry point.
+    assert is_entry_point(hubs["WAW"], arriving_from("OSL"), schengen) is False
+
+
+def test_rix_follows_the_same_entry_rule(hubs, schengen):
+    assert is_entry_point(hubs["RIX"], arriving_from("BKK"), schengen) is True
+    assert is_entry_point(hubs["RIX"], arriving_from("OSL"), schengen) is False
+
+
+def test_non_schengen_hubs_are_always_entry_points(hubs, schengen):
+    for iata in ("IST", "DOH", "DXB", "AUH"):
+        for origin in ("OSL", "BKK"):
+            assert is_entry_point(hubs[iata], arriving_from(origin), schengen) is True
+
+
+def test_waw_inbound_is_the_best_case_in_the_set(hubs, schengen):
+    """BKK -> WAW -> OSL: entry point, but the cheap buffer and no bag reclaim."""
+    lay = layover_at(
+        "WAW", "Europe/Warsaw", 8, 720, is_entry_point=True, requires_bag_reclaim=False
+    )
+    usable = usable_minutes(lay, hubs["WAW"], onward_to("OSL"), schengen)
+    # 720 - 15 disembark - 30 immigration - 50 transfer - 120 recheck - 45 margin
+    assert usable == 460
     assert band(usable) == "HALF_DAY"
 
 

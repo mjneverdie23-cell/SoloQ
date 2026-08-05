@@ -7,6 +7,20 @@ BAG_RECLAIM_MINUTES = 30
 LEAVING_SCHENGEN_BUFFER = 180
 
 
+def is_entry_point(
+    hub: Hub, arriving_from: Segment, schengen_airports: frozenset[str]
+) -> bool:
+    """SPEC.md §5.2.
+
+    Immigration happens at the first point of entry into the customs union, not
+    at the final destination.
+    """
+    if hub.iata in schengen_airports:
+        # Only an entry point if the inbound leg came from outside Schengen.
+        return arriving_from.origin not in schengen_airports
+    return True   # non-Schengen hubs: always clear immigration to go landside
+
+
 def recheck_buffer(hub: Hub, onward: Segment, schengen_airports: frozenset[str]) -> int:
     """SPEC.md §5.1.
 
