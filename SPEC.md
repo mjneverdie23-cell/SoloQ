@@ -115,7 +115,7 @@ class Layover:
     hub_iata: str
     arrival: datetime              # tz-aware, local to hub
     departure: datetime
-    gross_minutes: int
+    gross_minutes: int             # @property off arrival/departure, never stored
     usable_minutes: int            # after all deductions, §5
     open_hours_minutes: int        # overlap of city window with local 08:00-21:00
     is_entry_point: bool           # do we clear immigration here?

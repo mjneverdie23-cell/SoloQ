@@ -80,7 +80,15 @@ If a check fails, fix it before moving on. Don't accumulate broken steps.
 
 6. **Timezones are always explicit.** Every datetime is tz-aware and localised to
    the airport it describes. A naive datetime anywhere in this codebase is a bug.
-   The daylight-overlap calculation is meaningless without this.
+   The open-hours overlap calculation is meaningless without this.
+
+7. **Derivable values are properties, never stored fields.** If a value can be
+   computed from other fields on the same object, compute it. Storing it creates
+   a second authority that is free to disagree with the first. This rule is here
+   because the same defect shipped three times before it was named:
+   `exit_control_minutes` duplicated what the recheck buffer already covered,
+   `hub.is_schengen` duplicated the airport table, and `gross_minutes` duplicated
+   the layover endpoints. Two authorities for one fact is always the bug.
 
 ---
 

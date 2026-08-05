@@ -50,6 +50,10 @@ class Layover:
     hub_iata: str
     arrival: datetime              # tz-aware, local to hub
     departure: datetime            # tz-aware, local to hub
-    gross_minutes: int
     is_entry_point: bool
     requires_bag_reclaim: bool
+
+    @property
+    def gross_minutes(self) -> int:
+        """Derived, never stored — hard rule 7. What the UI calls the layover."""
+        return int((self.departure - self.arrival).total_seconds() // 60)

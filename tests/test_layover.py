@@ -75,8 +75,6 @@ def layover_at(hub_iata, tz, arrive_hour, gross_minutes, *, is_entry_point, requ
         hub_iata=hub_iata,
         arrival=arrival,
         departure=departure,
-        # Round down: never credit a minute we cannot prove (hard rule 3).
-        gross_minutes=int((departure - arrival).total_seconds() // 60),
         is_entry_point=is_entry_point,
         requires_bag_reclaim=requires_bag_reclaim,
     )
