@@ -8,11 +8,16 @@ from app.db import connect
 
 SEED_PATH = Path(__file__).resolve().parent.parent / "hubs.seed.json"
 
-HUB_COLUMNS = (
+AIRPORT_COLUMNS = (
     "iata",
     "city",
     "country_iso2",
     "is_schengen",
+    "verified_on",
+)
+
+HUB_COLUMNS = (
+    "iata",
     "transfer_minutes",
     "transfer_cost_eur",
     "transfer_mode",
@@ -46,6 +51,8 @@ def _insert(conn: sqlite3.Connection, table: str, columns: tuple[str, ...], rows
 
 def load_seed(conn: sqlite3.Connection, seed_path: Path = SEED_PATH) -> None:
     seed = json.loads(seed_path.read_text())
+    # Airports first: hub.iata is a foreign key into them.
+    _insert(conn, "airport", AIRPORT_COLUMNS, seed["airports"])
     _insert(conn, "hub", HUB_COLUMNS, seed["hubs"])
     _insert(conn, "entry_rule", ENTRY_RULE_COLUMNS, seed["entry_rules"])
     conn.commit()
@@ -54,7 +61,9 @@ def load_seed(conn: sqlite3.Connection, seed_path: Path = SEED_PATH) -> None:
 if __name__ == "__main__":
     conn = connect()
     load_seed(conn)
-    hubs = conn.execute("SELECT count(*) FROM hub").fetchone()[0]
-    rules = conn.execute("SELECT count(*) FROM entry_rule").fetchone()[0]
+    counts = [
+        conn.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
+        for table in ("airport", "hub", "entry_rule")
+    ]
     conn.close()
-    print(f"seeded {hubs} hubs, {rules} entry rules")
+    print("seeded {} airports, {} hubs, {} entry rules".format(*counts))

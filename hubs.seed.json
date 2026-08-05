@@ -5,12 +5,29 @@
     "passport_scope": ["NO", "SE", "DK", "FI", "IS"]
   },
 
+  "airports": [
+    {"iata": "OSL", "city": "Oslo",          "country_iso2": "NO", "is_schengen": true , "verified_on": null},
+    {"iata": "IST", "city": "Istanbul",      "country_iso2": "TR", "is_schengen": false, "verified_on": null},
+    {"iata": "DOH", "city": "Doha",          "country_iso2": "QA", "is_schengen": false, "verified_on": null},
+    {"iata": "DXB", "city": "Dubai",         "country_iso2": "AE", "is_schengen": false, "verified_on": null},
+    {"iata": "AUH", "city": "Abu Dhabi",     "country_iso2": "AE", "is_schengen": false, "verified_on": null},
+    {"iata": "WAW", "city": "Warsaw",        "country_iso2": "PL", "is_schengen": true , "verified_on": null},
+    {"iata": "RIX", "city": "Riga",          "country_iso2": "LV", "is_schengen": true , "verified_on": null},
+    {"iata": "BKK", "city": "Bangkok",       "country_iso2": "TH", "is_schengen": false, "verified_on": null},
+    {"iata": "SGN", "city": "Ho Chi Minh",   "country_iso2": "VN", "is_schengen": false, "verified_on": null},
+    {"iata": "HAN", "city": "Hanoi",         "country_iso2": "VN", "is_schengen": false, "verified_on": null},
+    {"iata": "DPS", "city": "Bali",          "country_iso2": "ID", "is_schengen": false, "verified_on": null},
+    {"iata": "KUL", "city": "Kuala Lumpur",  "country_iso2": "MY", "is_schengen": false, "verified_on": null},
+    {"iata": "SIN", "city": "Singapore",     "country_iso2": "SG", "is_schengen": false, "verified_on": null},
+    {"iata": "DEL", "city": "Delhi",         "country_iso2": "IN", "is_schengen": false, "verified_on": null},
+    {"iata": "CMB", "city": "Colombo",       "country_iso2": "LK", "is_schengen": false, "verified_on": null},
+    {"iata": "MNL", "city": "Manila",        "country_iso2": "PH", "is_schengen": false, "verified_on": null},
+    {"iata": "KTM", "city": "Kathmandu",     "country_iso2": "NP", "is_schengen": false, "verified_on": null}
+  ],
+
   "hubs": [
     {
       "iata": "IST",
-      "city": "Istanbul",
-      "country_iso2": "TR",
-      "is_schengen": false,
       "transfer_minutes": 60,
       "transfer_cost_eur": 1.80,
       "transfer_mode": "metro",
@@ -23,9 +40,6 @@
     },
     {
       "iata": "DOH",
-      "city": "Doha",
-      "country_iso2": "QA",
-      "is_schengen": false,
       "transfer_minutes": 25,
       "transfer_cost_eur": 0.55,
       "transfer_mode": "metro",
@@ -38,9 +52,6 @@
     },
     {
       "iata": "DXB",
-      "city": "Dubai",
-      "country_iso2": "AE",
-      "is_schengen": false,
       "transfer_minutes": 30,
       "transfer_cost_eur": 2.00,
       "transfer_mode": "metro",
@@ -53,9 +64,6 @@
     },
     {
       "iata": "AUH",
-      "city": "Abu Dhabi",
-      "country_iso2": "AE",
-      "is_schengen": false,
       "transfer_minutes": 45,
       "transfer_cost_eur": 1.00,
       "transfer_mode": "bus",
@@ -68,9 +76,6 @@
     },
     {
       "iata": "WAW",
-      "city": "Warsaw",
-      "country_iso2": "PL",
-      "is_schengen": true,
       "transfer_minutes": 25,
       "transfer_cost_eur": 1.10,
       "transfer_mode": "train",
@@ -83,9 +88,6 @@
     },
     {
       "iata": "RIX",
-      "city": "Riga",
-      "country_iso2": "LV",
-      "is_schengen": true,
       "transfer_minutes": 25,
       "transfer_cost_eur": 1.50,
       "transfer_mode": "bus",

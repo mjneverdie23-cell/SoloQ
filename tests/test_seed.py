@@ -1,3 +1,5 @@
+import sqlite3
+
 import pytest
 
 from app.db import connect
@@ -20,6 +22,38 @@ def conn(tmp_path):
 
 def rows(conn, table):
     return conn.execute(f"SELECT * FROM {table}").fetchall()
+
+
+def test_seventeen_airports_load(conn):
+    # OSL, the six hubs, the ten destinations.
+    assert len(rows(conn, "airport")) == 17
+
+
+def test_only_osl_waw_rix_are_schengen(conn):
+    schengen = {a["iata"] for a in rows(conn, "airport") if a["is_schengen"]}
+    assert schengen == {"OSL", "WAW", "RIX"}
+
+
+def test_every_airport_is_unverified(conn):
+    # Schengen membership changes — Croatia 2023, Bulgaria and Romania 2025 —
+    # so it is exactly the class of fact SPEC.md §7 exists for.
+    assert [a["verified_on"] for a in rows(conn, "airport")] == [None] * 17
+
+
+def test_every_hub_has_an_airport(conn):
+    airports = {a["iata"] for a in rows(conn, "airport")}
+    assert {hub["iata"] for hub in rows(conn, "hub")} <= airports
+
+
+def test_hub_without_an_airport_is_rejected(conn):
+    # A complete DXB row renamed, so the foreign key is the only thing wrong
+    # with it — a partial row would trip NOT NULL first and pass for free.
+    orphan = dict(conn.execute("SELECT * FROM hub WHERE iata = 'DXB'").fetchone())
+    orphan["iata"] = "ZZZ"
+    columns = ", ".join(orphan)
+    placeholders = ", ".join("?" * len(orphan))
+    with pytest.raises(sqlite3.IntegrityError, match="FOREIGN KEY"):
+        conn.execute(f"INSERT INTO hub ({columns}) VALUES ({placeholders})", list(orphan.values()))
 
 
 def test_six_hubs_load(conn):
@@ -76,9 +110,10 @@ def test_schengen_hubs_carry_the_shorter_buffer(conn):
 
 def test_hub_flags_and_density_in_range(conn):
     for hub in rows(conn, "hub"):
-        assert hub["is_schengen"] in (0, 1)
         assert hub["has_left_luggage"] in (0, 1)
         assert 0.0 <= hub["activity_density"] <= 1.0
+    for airport in rows(conn, "airport"):
+        assert airport["is_schengen"] in (0, 1)
 
 
 def test_transfer_note_survives_the_load(conn):
@@ -88,6 +123,7 @@ def test_transfer_note_survives_the_load(conn):
 
 def test_seeding_twice_is_idempotent(conn):
     load_seed(conn)
+    assert len(rows(conn, "airport")) == 17
     assert len(rows(conn, "hub")) == 6
     assert len(rows(conn, "entry_rule")) == 5
 

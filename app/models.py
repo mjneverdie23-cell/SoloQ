@@ -6,15 +6,23 @@ steps that compute them.
 """
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 
 
 @dataclass(frozen=True)
-class Hub:
+class Airport:
     iata: str
     city: str
     country_iso2: str
     is_schengen: bool
+    verified_on: date | None
+
+
+@dataclass(frozen=True)
+class Hub:
+    """An airport with operational data. Airport facts live on Airport."""
+
+    iata: str
     transfer_minutes: int
     transfer_cost_eur: float
     transfer_mode: str

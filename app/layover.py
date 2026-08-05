@@ -13,7 +13,7 @@ def recheck_buffer(hub: Hub, onward: Segment, schengen_airports: frozenset[str])
     A Schengen hub's 120 assumes an intra-Schengen departure. Leaving the zone
     means full exit control, which is what the non-Schengen 180 already covers.
     """
-    if hub.is_schengen and onward.destination not in schengen_airports:
+    if hub.iata in schengen_airports and onward.destination not in schengen_airports:
         return LEAVING_SCHENGEN_BUFFER
     return hub.recheck_buffer_minutes
 

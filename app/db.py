@@ -7,11 +7,16 @@ from pathlib import Path
 DEFAULT_DB_PATH = "layover.db"
 
 SCHEMA = """
-CREATE TABLE IF NOT EXISTS hub (
+CREATE TABLE IF NOT EXISTS airport (
     iata                    TEXT PRIMARY KEY,
     city                    TEXT    NOT NULL,
     country_iso2            TEXT    NOT NULL,
     is_schengen             INTEGER NOT NULL,
+    verified_on             TEXT
+);
+
+CREATE TABLE IF NOT EXISTS hub (
+    iata                    TEXT PRIMARY KEY REFERENCES airport(iata),
     transfer_minutes        INTEGER NOT NULL,
     transfer_cost_eur       REAL    NOT NULL,
     transfer_mode           TEXT    NOT NULL,
@@ -40,5 +45,7 @@ def connect(path: str | Path | None = None) -> sqlite3.Connection:
     """Open the database, creating the schema if it is not there yet."""
     conn = sqlite3.connect(path or os.environ.get("LAYOVER_DB", DEFAULT_DB_PATH))
     conn.row_factory = sqlite3.Row
+    # Off by default in SQLite, so hub.iata -> airport.iata would not be enforced.
+    conn.execute("PRAGMA foreign_keys = ON")
     conn.executescript(SCHEMA)
     return conn

@@ -57,11 +57,16 @@ No Docker for v0. No auth. No user accounts.
 # --- Reference data (seeded, hand-verified) ---
 
 @dataclass
-class Hub:
+class Airport:
     iata: str                      # "IST"
     city: str
     country_iso2: str
     is_schengen: bool
+    verified_on: date | None       # membership changes — see §7
+
+@dataclass
+class Hub:                         # keyed on iata, FK to airport
+    iata: str                      # "IST"
     transfer_minutes: int          # airport -> city centre, one way, public transit
     transfer_cost_eur: float       # one way
     transfer_mode: str             # "metro" | "train" | "bus"
@@ -132,6 +137,13 @@ class Comparison:
 `net_saving_eur` is the number the whole product exists to display. If it's
 negative the itinerary is honestly worse and we say so.
 
+A hub is an airport with extra operational data. `city`, `country_iso2` and
+`is_schengen` are airport facts and live only on `Airport` — duplicating them on
+`Hub` is the same error class as the removed `exit_control_minutes`. There is no
+country table: Schengen membership is properly a country property, but at
+fifteen countries against seventeen airports the normalisation buys nothing and
+costs a join. Revisit past ~50 airports.
+
 ---
 
 ## 5. Scoring — the core logic
@@ -139,15 +151,17 @@ negative the itinerary is honestly worse and we say so.
 ### 5.1 Usable time
 
 ```python
-def recheck_buffer(hub: Hub, onward: Segment) -> int:
+def recheck_buffer(hub: Hub, onward: Segment, schengen_airports: frozenset[str]) -> int:
     # A Schengen hub's 120 assumes an intra-Schengen departure. Leaving the zone
     # means full exit control — which is what the non-Schengen 180 already covers.
-    if hub.is_schengen and not is_schengen_airport(onward.destination):
+    if hub.iata in schengen_airports and onward.destination not in schengen_airports:
         return 180
     return hub.recheck_buffer_minutes
 
 
-def usable_minutes(lay: Layover, hub: Hub, onward: Segment) -> int:
+def usable_minutes(
+    lay: Layover, hub: Hub, onward: Segment, schengen_airports: frozenset[str]
+) -> int:
     m = lay.gross_minutes
     m -= hub.disembark_minutes
     if lay.is_entry_point:
@@ -155,10 +169,16 @@ def usable_minutes(lay: Layover, hub: Hub, onward: Segment) -> int:
     if lay.requires_bag_reclaim:
         m -= 30
     m -= hub.transfer_minutes * 2
-    m -= recheck_buffer(hub, onward)
+    m -= recheck_buffer(hub, onward, schengen_airports)
     m -= SAFETY_MARGIN            # 45
     return max(0, m)
 ```
+
+The Schengen airport set is passed in, not read from a module-level lookup. It
+comes from `load_schengen_airports(conn)` in `app/geo.py`, called once at the
+edge; a global that reaches into the database would make these pure functions
+impure and awkward to test. It is also the single authority on whether the *hub*
+is in Schengen, which is why `Hub` no longer carries `is_schengen`.
 
 There is no `exit_control_minutes` deduction. Departure passport control is real
 and it does cost ~25 minutes at DXB — but it is already inside
@@ -188,10 +208,10 @@ This is the rule most tools get wrong. Immigration happens at the **first point
 of entry into the customs union**, not at the final destination.
 
 ```python
-def is_entry_point(hub: Hub, arriving_from: Segment) -> bool:
-    if hub.is_schengen:
+def is_entry_point(hub: Hub, arriving_from: Segment, schengen_airports: frozenset[str]) -> bool:
+    if hub.iata in schengen_airports:
         # Only an entry point if the inbound leg came from outside Schengen.
-        return not is_schengen_airport(arriving_from.origin)
+        return arriving_from.origin not in schengen_airports
     return True   # non-Schengen hubs: always clear immigration to go landside
 ```
 
@@ -234,6 +254,10 @@ if daylight_minutes < 120:
 
 A 22:00–10:00 layover is a hotel opportunity, not a sightseeing one. An
 08:00–20:00 layover is the reverse. Same duration, opposite plan.
+
+No timezone table. Segment datetimes are tz-aware and localised to the airport,
+so the local wall-clock hour is already available on the datetime itself — that
+is all the 08:00–21:00 overlap needs.
 
 ### 5.5 Score
 
@@ -393,8 +417,8 @@ are testable; generated ones are not.
 ## 10. Build order and verification
 
 ```
-1. Hub + EntryRule seed data loaded from JSON → verify: 6 hubs, 5 entry rules,
-   all fields non-null, `pytest tests/test_seed.py` green.
+1. Airport + Hub + EntryRule seed data loaded from JSON → verify: 17 airports,
+   6 hubs, 5 entry rules, all fields non-null, `pytest tests/test_seed.py` green.
 
 2. Layover computation from a static itinerary fixture → verify: the DXB worked
    example in §5.3 returns exactly 375 and band HALF_DAY.
@@ -402,23 +426,26 @@ are testable; generated ones are not.
 3. Entry-point logic → verify: BKK→WAW→OSL marks WAW as entry point;
    OSL→WAW→BKK does not.
 
-4. Scoring + hard gates → verify: a 150-minute layover scores 0 with
+4. Daylight overlay (§5.4) → verify: a layover 22:00–10:00 local with 12h gross
+   yields daylight_minutes < 120 and a band that is not HALF_DAY.
+
+5. Scoring + hard gates → verify: a 150-minute layover scores 0 with
    blocked_reason set; a visa_required rule scores 0 regardless of duration.
 
-5. FareSource protocol + FixtureSource + the 8 fixtures of §8.2 → verify: each
+6. FareSource protocol + FixtureSource + the 8 fixtures of §8.2 → verify: each
    fixture's `expected` block matches computed output.
 
-6. Comparison calculation → verify: ist_negative_saving yields
+7. Comparison calculation → verify: ist_negative_saving yields
    net_saving_eur < 0, and the UI says so plainly.
 
-7. Jinja result page → verify: renders all 8 fixtures without error, each with
+8. Jinja result page → verify: renders all 8 fixtures without error, each with
    band, usable hours, return-by time, plan, comparison and the §8.3 banner.
 
-8. AmadeusSource + call counter → verify: parses a live response into the same
+9. AmadeusSource + call counter → verify: parses a live response into the same
    Itinerary shape, counter increments, refuses to fire at quota.
 
-9. Nightly batch writing to SQLite → verify: one full run completes under the
-   call budget and populates results.
+10. Nightly batch writing to SQLite → verify: one full run completes under the
+    call budget and populates results.
 ```
 
 Do not proceed to step N+1 until step N's verification passes.
@@ -447,12 +474,12 @@ Building any of these is a spec violation, not initiative:
 
 ---
 
-## 12. Open questions to resolve before step 8
+## 12. Open questions to resolve before step 9
 
 1. Does Amadeus's terms of service permit displaying fares alongside third-party
    activity recommendations? Read them; this affects v1 monetisation.
 2. Is `is_single_ticket` reliably derivable from the Amadeus response, or does it
    need inference from `validatingAirlineCodes` and segment carriers? If the
    latter, that's an assumption to surface, not hide.
-3. What is the actual willingness to pay? Before step 7, put a landing page up
+3. What is the actual willingness to pay? Before step 8, put a landing page up
    with a fake "generate my plan — €7" button and count clicks.

@@ -71,7 +71,7 @@ If a check fails, fix it before moving on. Don't accumulate broken steps.
    real flight. When in doubt, subtract more.
 
 4. **Watch the API quota.** The Amadeus free tier is ~2000 calls/month and the v0
-   budget is ~640. Build the call counter in step 8 before any batch code exists.
+   budget is ~640. Build the call counter in step 9 before any batch code exists.
    Any change that multiplies call volume needs the budget recalculated first —
    raise it, don't absorb it.
 
