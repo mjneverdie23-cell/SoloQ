@@ -75,7 +75,8 @@ class Hub:                         # keyed on iata, FK to airport
     immigration_minutes: int       # only applied when this is an entry point
     recheck_buffer_minutes: int    # required presence before onward departure
     has_left_luggage: bool
-    activity_density: float        # 0.0-1.0, hand-scored
+    activity_density: float        # 0.0-1.0, hand-scored editorial judgement
+    verified_on: date | None       # transfer/buffer times go stale — see §7
 
 @dataclass
 class EntryRule:
@@ -120,10 +121,11 @@ class Layover:
     open_hours_minutes: int        # overlap of city window with local 08:00-21:00
     is_entry_point: bool           # do we clear immigration here?
     requires_bag_reclaim: bool
+    requires_terminal_change: bool # penalised in §5.5
     band: str                      # NO_EXIT | QUICK | HALF_DAY | FULL_DAY
                                    # | OVERNIGHT | OVERNIGHT_NIGHT_ARRIVAL (§5.4)
     score: int                     # 0-100
-    blocked_reason: str | None
+    blocked_reasons: list[str]     # every failing gate, not just the first
 
 @dataclass
 class Comparison:
@@ -300,7 +302,7 @@ WEIGHTS = {
     "access":     0.20,   # 1 - (transfer_minutes / 90), floored at 0
     "entry_ease": 0.20,   # schengen_internal 1.0 | visa_free 0.9 | voa 0.6
                           # | evisa 0.3 | visa_required 0.0
-    "density":    0.10,   # hub.activity_density
+    "density":    0.10,   # hub.activity_density — editorial, not measured
 }
 PENALTIES = {
     "bag_reclaim": -15,
@@ -308,15 +310,28 @@ PENALTIES = {
 }
 ```
 
+`entry_ease` is nearly inert in v0 and must not be tuned away. All five entry
+rules are `schengen_internal` or `visa_free`, so the term only ever takes 1.0 or
+0.9 — 20% of the weight moving a maximum of two points — and `visa_required` →
+0.0 is unreachable, because it is also a hard gate. It becomes the most
+discriminating term in the model the moment v1 adds a non-Nordic passport, and
+reweighting now means reweighting back later. Keep the weight and the mapping;
+just do not calibrate the other weights against a signal that does not move.
+
 ### 5.6 Hard gates
 
-Score is forced to 0 and `blocked_reason` set when any of these hold:
+Score is forced to 0 and every failing gate is appended to `blocked_reasons`:
 
 1. `entry_type` is `visa_required` or `no_landside_access` for this passport.
 2. `usable_minutes < 180`.
 3. Self-transfer with checked bags and `hub.has_left_luggage is False`.
-4. Passport validity requirement not met (we can't check this — surface it as a
-   user-confirmed checkbox, not a silent pass).
+
+**Collect all of them; never short-circuit.** Someone told only "layover too
+short" will go and find a longer one, then hit the visa wall they were never
+shown. That is why `blocked_reasons` is a list.
+
+Passport validity is **not** a gate. We cannot check it, so zeroing a score on
+it would imply that we had. It is a user-confirmed checkbox at step 8.
 
 ---
 
@@ -351,6 +366,11 @@ Entry rules and transfer times go stale and being wrong is a missed flight.
 
 - Every `EntryRule` row carries `verified_on`. Rows older than 180 days render
   with a staleness warning in the UI and are excluded from any "recommended" list.
+- **The staleness gate fails closed.** `verified_on = null` means stale, not
+  "no requirement". Every row in the seed is null today, so every result carries
+  the warning and nothing is eligible for a "recommended" list. That is correct
+  and must not be softened: an unverified-data path that renders clean is
+  precisely what this section exists to prevent.
 - Every generated plan carries a visible disclaimer: entry requirements are the
   traveller's responsibility and must be confirmed with the carrier.
 - Never present a computed `usable_minutes` as a guarantee. Present it as
@@ -389,7 +409,7 @@ specific branch of the scoring logic:
 | `waw_inbound_bkk_osl` | Schengen entry point, no bag reclaim, 120 buffer |
 | `waw_outbound_osl_bkk` | Not an entry point, but 180 buffer — the §5.1 rule |
 | `ist_night_2200_1000` | Open-hours gate → `NO_EXIT` despite 12h gross |
-| `doh_150min` | Hard gate → score 0, `blocked_reason` set |
+| `doh_150min` | Hard gate → score 0, `blocked_reasons` non-empty |
 | `rix_22h_overnight` | `OVERNIGHT` band |
 | `dxb_selftransfer_bags` | Bag reclaim penalty, `is_single_ticket: False` |
 | `ist_negative_saving` | Plan cost > fare saving → `net_saving_eur < 0` |
@@ -463,7 +483,9 @@ are testable; generated ones are not.
    usable 320, open_hours_minutes 0, band NO_EXIT.
 
 5. Scoring + hard gates → verify: a 150-minute layover scores 0 with
-   blocked_reason set; a visa_required rule scores 0 regardless of duration.
+   blocked_reasons non-empty; a visa_required rule scores 0 regardless of
+   duration; both failing at once produce two reasons, not one; every row
+   being unverified makes every result stale and nothing recommendable.
 
 6. FareSource protocol + FixtureSource + the 8 fixtures of §8.2 → verify: each
    fixture's `expected` block matches computed output.

@@ -6,7 +6,7 @@ from app.db import connect
 from app.seed import load_seed
 
 # `transfer_note` is `str | None` in the Hub dataclass (SPEC.md §4).
-NULLABLE_HUB_COLUMNS = {"transfer_note"}
+NULLABLE_HUB_COLUMNS = {"transfer_note", "verified_on"}
 # `max_stay_days` is `int | None`; `verified_on` is null across the whole seed
 # by design — see test_every_entry_rule_is_unverified.
 NULLABLE_ENTRY_RULE_COLUMNS = {"max_stay_days", "verified_on"}

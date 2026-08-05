@@ -27,6 +27,7 @@ HUB_COLUMNS = (
     "recheck_buffer_minutes",
     "has_left_luggage",
     "activity_density",
+    "verified_on",
 )
 
 ENTRY_RULE_COLUMNS = (

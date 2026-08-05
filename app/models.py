@@ -31,7 +31,19 @@ class Hub:
     immigration_minutes: int
     recheck_buffer_minutes: int
     has_left_luggage: bool
-    activity_density: float
+    activity_density: float   # hand-scored opinion, not measurement
+    verified_on: date | None
+
+
+@dataclass(frozen=True)
+class EntryRule:
+    passport_scope: str
+    country_iso2: str
+    entry_type: str
+    max_stay_days: int | None
+    passport_validity_days: int
+    notes: str
+    verified_on: date | None
 
 
 @dataclass(frozen=True)
@@ -46,12 +58,22 @@ class Segment:
 
 
 @dataclass(frozen=True)
+class Itinerary:
+    id: str
+    price_eur: float
+    is_single_ticket: bool         # False => self-transfer, bags not through-checked
+    outbound: list[Segment]
+    inbound: list[Segment]
+
+
+@dataclass(frozen=True)
 class Layover:
     hub_iata: str
     arrival: datetime              # tz-aware, local to hub
     departure: datetime            # tz-aware, local to hub
     is_entry_point: bool
     requires_bag_reclaim: bool
+    requires_terminal_change: bool
 
     @property
     def gross_minutes(self) -> int:

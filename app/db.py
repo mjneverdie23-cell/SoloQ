@@ -25,7 +25,8 @@ CREATE TABLE IF NOT EXISTS hub (
     immigration_minutes     INTEGER NOT NULL,
     recheck_buffer_minutes  INTEGER NOT NULL,
     has_left_luggage        INTEGER NOT NULL,
-    activity_density        REAL    NOT NULL
+    activity_density        REAL    NOT NULL,
+    verified_on             TEXT
 );
 
 CREATE TABLE IF NOT EXISTS entry_rule (

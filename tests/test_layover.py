@@ -67,7 +67,10 @@ def arriving_from(origin: str) -> Segment:
     )
 
 
-def layover_at(hub_iata, tz, arrive_hour, gross_minutes, *, is_entry_point, requires_bag_reclaim):
+def layover_at(
+    hub_iata, tz, arrive_hour, gross_minutes, *,
+    is_entry_point, requires_bag_reclaim, requires_terminal_change=False,
+):
     """Build a layover from tz-aware endpoints, deriving gross_minutes from them."""
     arrival = datetime(2026, 9, 1, arrive_hour, 0, tzinfo=ZoneInfo(tz))
     departure = arrival + timedelta(minutes=gross_minutes)
@@ -77,6 +80,7 @@ def layover_at(hub_iata, tz, arrive_hour, gross_minutes, *, is_entry_point, requ
         departure=departure,
         is_entry_point=is_entry_point,
         requires_bag_reclaim=requires_bag_reclaim,
+        requires_terminal_change=requires_terminal_change,
     )
 
 
