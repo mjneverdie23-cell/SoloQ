@@ -1,0 +1,50 @@
+{
+  "id": "dxb_selftransfer_bags",
+  "note": "Self-transfer at a multi-terminal hub: bag reclaim and terminal change both apply (\u00a75.7).",
+  "price_eur": 418.0,
+  "baseline_price_eur": 690.0,
+  "layover_plan_cost_eur": 45.0,
+  "is_single_ticket": false,
+  "outbound": [
+    {
+      "carrier": "D8",
+      "flight_number": "DY1932",
+      "origin": "OSL",
+      "destination": "DXB",
+      "departure_local": "2026-08-31T23:40:00+02:00",
+      "arrival_local": "2026-09-01T08:00:00+04:00",
+      "is_international": true
+    },
+    {
+      "carrier": "FZ",
+      "flight_number": "FZ503",
+      "origin": "DXB",
+      "destination": "BKK",
+      "departure_local": "2026-09-01T20:00:00+04:00",
+      "arrival_local": "2026-09-02T05:05:00+07:00",
+      "is_international": true
+    }
+  ],
+  "inbound": [
+    {
+      "carrier": "TG",
+      "flight_number": "TG954",
+      "origin": "BKK",
+      "destination": "OSL",
+      "departure_local": "2026-09-16T01:10:00+07:00",
+      "arrival_local": "2026-09-16T07:40:00+02:00",
+      "is_international": true
+    }
+  ],
+  "expected": {
+    "hub_iata": "DXB",
+    "gross_minutes": 720,
+    "usable_minutes": 345,
+    "open_hours_minutes": 345,
+    "window_start_local": "2026-09-01T10:00:00+04:00",
+    "window_end_local": "2026-09-01T15:45:00+04:00",
+    "band": "QUICK",
+    "score": 48,
+    "blocked_reasons": []
+  }
+}

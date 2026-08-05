@@ -1,0 +1,50 @@
+{
+  "id": "rix_23h_overnight",
+  "note": "23 hours, not 22: RIX deducts 257 minutes, so 22h yields 1063 and misses OVERNIGHT by 17.",
+  "price_eur": 521.0,
+  "baseline_price_eur": 700.0,
+  "layover_plan_cost_eur": 95.0,
+  "is_single_ticket": true,
+  "outbound": [
+    {
+      "carrier": "BT",
+      "flight_number": "BT654",
+      "origin": "BKK",
+      "destination": "RIX",
+      "departure_local": "2026-09-01T01:15:00+07:00",
+      "arrival_local": "2026-09-01T12:00:00+03:00",
+      "is_international": true
+    },
+    {
+      "carrier": "BT",
+      "flight_number": "BT151",
+      "origin": "RIX",
+      "destination": "OSL",
+      "departure_local": "2026-09-02T11:00:00+03:00",
+      "arrival_local": "2026-09-02T12:05:00+02:00",
+      "is_international": true
+    }
+  ],
+  "inbound": [
+    {
+      "carrier": "TG",
+      "flight_number": "TG954",
+      "origin": "OSL",
+      "destination": "BKK",
+      "departure_local": "2026-08-18T13:45:00+02:00",
+      "arrival_local": "2026-08-19T06:15:00+07:00",
+      "is_international": true
+    }
+  ],
+  "expected": {
+    "hub_iata": "RIX",
+    "gross_minutes": 1380,
+    "usable_minutes": 1123,
+    "open_hours_minutes": 473,
+    "window_start_local": "2026-09-01T13:07:00+03:00",
+    "window_end_local": "2026-09-02T07:50:00+03:00",
+    "band": "OVERNIGHT",
+    "score": 90,
+    "blocked_reasons": []
+  }
+}

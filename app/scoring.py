@@ -42,6 +42,13 @@ STALENESS_DAYS = 180
 
 @dataclass(frozen=True)
 class Assessment:
+    """Blocked and stale are different states and must not be collapsed.
+
+    Blocked means the traveller cannot do this. Stale means we do not trust our
+    own numbers. Merging them would let a verification sweep — stamping
+    verified_on across the seed — show up as if it were a routing improvement.
+    """
+
     score: int
     blocked_reasons: list[str]
     stale_reasons: list[str]

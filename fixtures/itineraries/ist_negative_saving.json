@@ -1,0 +1,50 @@
+{
+  "id": "ist_negative_saving",
+  "note": "Fare saving of 20 EUR against a 55 EUR plan. net_saving_eur is negative and must be said plainly.",
+  "price_eur": 640.0,
+  "baseline_price_eur": 660.0,
+  "layover_plan_cost_eur": 55.0,
+  "is_single_ticket": true,
+  "outbound": [
+    {
+      "carrier": "TK",
+      "flight_number": "TK4102",
+      "origin": "OSL",
+      "destination": "IST",
+      "departure_local": "2026-09-01T03:35:00+02:00",
+      "arrival_local": "2026-09-01T08:00:00+03:00",
+      "is_international": true
+    },
+    {
+      "carrier": "TK",
+      "flight_number": "TK68",
+      "origin": "IST",
+      "destination": "BKK",
+      "departure_local": "2026-09-01T20:00:00+03:00",
+      "arrival_local": "2026-09-02T09:20:00+07:00",
+      "is_international": true
+    }
+  ],
+  "inbound": [
+    {
+      "carrier": "TG",
+      "flight_number": "TG954",
+      "origin": "BKK",
+      "destination": "OSL",
+      "departure_local": "2026-09-16T01:10:00+07:00",
+      "arrival_local": "2026-09-16T07:40:00+02:00",
+      "is_international": true
+    }
+  ],
+  "expected": {
+    "hub_iata": "IST",
+    "gross_minutes": 720,
+    "usable_minutes": 320,
+    "open_hours_minutes": 320,
+    "window_start_local": "2026-09-01T09:55:00+03:00",
+    "window_end_local": "2026-09-01T15:15:00+03:00",
+    "band": "QUICK",
+    "score": 60,
+    "blocked_reasons": []
+  }
+}

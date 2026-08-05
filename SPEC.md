@@ -333,6 +333,23 @@ shown. That is why `blocked_reasons` is a list.
 Passport validity is **not** a gate. We cannot check it, so zeroing a score on
 it would imply that we had. It is a user-confirmed checkbox at step 8.
 
+### 5.7 v0 derivation rules
+
+Two `Layover` fields are not given by any fare response and are not lookups.
+Both are stated here so they are applied mechanically rather than set by feel
+per fixture:
+
+- `requires_bag_reclaim` is `not itin.is_single_ticket`. Self-transfer means
+  bags are not through-checked, so they come off the belt.
+- `requires_terminal_change` is `True` for self-transfer itineraries at
+  multi-terminal hubs — DXB, IST, AUH — and `False` otherwise. Single-ticket
+  connections are assumed same-terminal or airside-connected.
+
+Terminal change is properly a property of the *pair* of terminals, which
+depends on the two carriers, which is data we do not have. This is a heuristic.
+A terminal map is v1, and when it arrives the multi-terminal flag moves onto
+`Airport` and stops being a constant in code.
+
 ---
 
 ## 6. Entry rules — Nordic passports, v0 hubs
@@ -410,14 +427,25 @@ specific branch of the scoring logic:
 | `waw_outbound_osl_bkk` | Not an entry point, but 180 buffer — the §5.1 rule |
 | `ist_night_2200_1000` | Open-hours gate → `NO_EXIT` despite 12h gross |
 | `doh_150min` | Hard gate → score 0, `blocked_reasons` non-empty |
-| `rix_22h_overnight` | `OVERNIGHT` band |
-| `dxb_selftransfer_bags` | Bag reclaim penalty, `is_single_ticket: False` |
+| `rix_23h_overnight` | `OVERNIGHT` band — 22h does not reach it, see below |
+| `dxb_selftransfer_bags` | Both penalties — self-transfer at a multi-terminal hub (§5.7) |
 | `ist_negative_saving` | Plan cost > fare saving → `net_saving_eur < 0` |
 
-Each fixture carries its own baseline fare, so the `Comparison` calculation works
-end to end. Each also carries an `expected` block — band, usable minutes, score —
-and the suite asserts computed output against it. That makes the fixtures the
-regression suite, not just demo dressing.
+`rix_23h_overnight` is not a typo. RIX deducts 257 minutes, so a 22-hour layover
+yields 1063 usable — `FULL_DAY`, seventeen minutes short of the `OVERNIGHT`
+floor. It takes 23 hours to reach a band whose name implies a night. That is the
+§5.3 lesson at a larger scale and the fixture is named for the truth.
+
+Each fixture carries its own baseline fare and a hard-coded
+`layover_plan_cost_eur`, so the `Comparison` calculation works end to end at
+step 7 without waiting for §9's activity rows, which are step 10. Each holds
+exactly one layover, so its `expected` block is unambiguous. Each also carries an `expected` block — band, usable minutes, score —
+and the suite asserts computed output against it. The block carries the **city
+window endpoints**, not only durations: moving `SAFETY_MARGIN` from the end of
+the window to the start leaves `usable_minutes` byte-identical while shifting
+both displayed timestamps by 45 minutes, and only an assertion on the timestamps
+catches it. That makes the fixtures the regression suite, not just demo
+dressing.
 
 ### 8.3 Demo mode must be visible
 

@@ -1,0 +1,50 @@
+{
+  "id": "ist_night_2200_1000",
+  "note": "Twelve hours that are worth nothing. Duration says QUICK; \u00a75.4 says NO_EXIT.",
+  "price_eur": 455.0,
+  "baseline_price_eur": 612.0,
+  "layover_plan_cost_eur": 0.0,
+  "is_single_ticket": true,
+  "outbound": [
+    {
+      "carrier": "TK",
+      "flight_number": "TK4106",
+      "origin": "OSL",
+      "destination": "IST",
+      "departure_local": "2026-09-01T17:35:00+02:00",
+      "arrival_local": "2026-09-01T22:00:00+03:00",
+      "is_international": true
+    },
+    {
+      "carrier": "TK",
+      "flight_number": "TK68",
+      "origin": "IST",
+      "destination": "BKK",
+      "departure_local": "2026-09-02T10:00:00+03:00",
+      "arrival_local": "2026-09-02T23:20:00+07:00",
+      "is_international": true
+    }
+  ],
+  "inbound": [
+    {
+      "carrier": "TG",
+      "flight_number": "TG954",
+      "origin": "BKK",
+      "destination": "OSL",
+      "departure_local": "2026-09-16T01:10:00+07:00",
+      "arrival_local": "2026-09-16T07:40:00+02:00",
+      "is_international": true
+    }
+  ],
+  "expected": {
+    "hub_iata": "IST",
+    "gross_minutes": 720,
+    "usable_minutes": 320,
+    "open_hours_minutes": 0,
+    "window_start_local": "2026-09-01T23:55:00+03:00",
+    "window_end_local": "2026-09-02T05:15:00+03:00",
+    "band": "NO_EXIT",
+    "score": 47,
+    "blocked_reasons": []
+  }
+}

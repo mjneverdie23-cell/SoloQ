@@ -2,11 +2,17 @@
 
 from datetime import datetime, time, timedelta
 
-from app.models import Hub, Layover, Segment
+from app.models import Hub, Itinerary, Layover, Segment
 
 SAFETY_MARGIN = 45
 BAG_RECLAIM_MINUTES = 30
 LEAVING_SCHENGEN_BUFFER = 180
+
+# SPEC.md §5.7. A heuristic, not a lookup: terminal change is properly a
+# property of the pair of terminals, which depends on the two carriers, which
+# is data we do not have. When a terminal map arrives at v1 this moves onto
+# Airport and stops being a constant here.
+MULTI_TERMINAL_HUBS = frozenset({"DXB", "IST", "AUH"})
 
 CITY_OPEN_LOCAL = 8
 CITY_CLOSE_LOCAL = 21
@@ -116,3 +122,30 @@ def band(usable: int, open_hours: int) -> str:
 def _floor_minutes(delta: timedelta) -> int:
     """Round down. Never credit a minute we cannot prove (hard rule 3)."""
     return int(delta.total_seconds() // 60)
+
+
+def layovers_of(
+    segments: list[Segment],
+    itin: Itinerary,
+    hubs: dict[str, Hub],
+    schengen_airports: frozenset[str],
+) -> list[Layover]:
+    """Every connection in one direction, as a Layover. §5.7 fixes the two
+    fields no fare response gives us, so they are applied mechanically rather
+    than judged case by case."""
+    self_transfer = not itin.is_single_ticket
+    return [
+        Layover(
+            hub_iata=arriving.destination,
+            arrival=arriving.arrival_local,
+            departure=onward.departure_local,
+            is_entry_point=is_entry_point(
+                hubs[arriving.destination], arriving, schengen_airports
+            ),
+            requires_bag_reclaim=self_transfer,
+            requires_terminal_change=(
+                self_transfer and arriving.destination in MULTI_TERMINAL_HUBS
+            ),
+        )
+        for arriving, onward in zip(segments, segments[1:])
+    ]

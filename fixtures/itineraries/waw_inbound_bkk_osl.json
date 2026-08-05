@@ -1,0 +1,50 @@
+{
+  "id": "waw_inbound_bkk_osl",
+  "note": "BKK->WAW->OSL. Warsaw is the point of entry; the onward leg stays in Schengen.",
+  "price_eur": 498.0,
+  "baseline_price_eur": 645.0,
+  "layover_plan_cost_eur": 30.0,
+  "is_single_ticket": true,
+  "outbound": [
+    {
+      "carrier": "LO",
+      "flight_number": "LO78",
+      "origin": "BKK",
+      "destination": "WAW",
+      "departure_local": "2026-09-01T00:30:00+07:00",
+      "arrival_local": "2026-09-01T08:00:00+02:00",
+      "is_international": true
+    },
+    {
+      "carrier": "LO",
+      "flight_number": "LO461",
+      "origin": "WAW",
+      "destination": "OSL",
+      "departure_local": "2026-09-01T20:00:00+02:00",
+      "arrival_local": "2026-09-01T21:45:00+02:00",
+      "is_international": true
+    }
+  ],
+  "inbound": [
+    {
+      "carrier": "TG",
+      "flight_number": "TG954",
+      "origin": "OSL",
+      "destination": "BKK",
+      "departure_local": "2026-08-18T13:45:00+02:00",
+      "arrival_local": "2026-08-19T06:15:00+07:00",
+      "is_international": true
+    }
+  ],
+  "expected": {
+    "hub_iata": "WAW",
+    "gross_minutes": 720,
+    "usable_minutes": 460,
+    "open_hours_minutes": 460,
+    "window_start_local": "2026-09-01T09:10:00+02:00",
+    "window_end_local": "2026-09-01T16:50:00+02:00",
+    "band": "HALF_DAY",
+    "score": 79,
+    "blocked_reasons": []
+  }
+}

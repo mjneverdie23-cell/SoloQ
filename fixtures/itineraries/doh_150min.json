@@ -1,0 +1,52 @@
+{
+  "id": "doh_150min",
+  "note": "A 150-minute connection. Deductions exceed the layover, so the \u00a75.6 gate fires.",
+  "price_eur": 540.0,
+  "baseline_price_eur": 585.0,
+  "layover_plan_cost_eur": 0.0,
+  "is_single_ticket": true,
+  "outbound": [
+    {
+      "carrier": "QR",
+      "flight_number": "QR176",
+      "origin": "OSL",
+      "destination": "DOH",
+      "departure_local": "2026-09-01T15:50:00+02:00",
+      "arrival_local": "2026-09-02T00:00:00+03:00",
+      "is_international": true
+    },
+    {
+      "carrier": "QR",
+      "flight_number": "QR832",
+      "origin": "DOH",
+      "destination": "BKK",
+      "departure_local": "2026-09-02T02:30:00+03:00",
+      "arrival_local": "2026-09-02T13:10:00+07:00",
+      "is_international": true
+    }
+  ],
+  "inbound": [
+    {
+      "carrier": "TG",
+      "flight_number": "TG954",
+      "origin": "BKK",
+      "destination": "OSL",
+      "departure_local": "2026-09-16T01:10:00+07:00",
+      "arrival_local": "2026-09-16T07:40:00+02:00",
+      "is_international": true
+    }
+  ],
+  "expected": {
+    "hub_iata": "DOH",
+    "gross_minutes": 150,
+    "usable_minutes": 0,
+    "open_hours_minutes": 0,
+    "window_start_local": "2026-09-02T01:10:00+03:00",
+    "window_end_local": "2026-09-01T22:20:00+03:00",
+    "band": "NO_EXIT",
+    "score": 0,
+    "blocked_reasons": [
+      "only 0 usable minutes, under the 180 floor"
+    ]
+  }
+}

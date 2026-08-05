@@ -291,6 +291,11 @@ def test_window_delta_equals_the_deduction_list(
 
     usable_minutes is derived from city_window now. If a future edit moves a
     term into one and not the other, this is what catches it.
+
+    Moving a term fails 144 of these 192 cases. The 48 survivors are the
+    short-layover combinations whose usable time floors to zero whichever way
+    the term moves, so the mutation is genuinely invisible there. That is a
+    real answer, not partial coverage.
     """
     lay = layover_at(hub_iata, tz, 8, gross, is_entry_point=entry, requires_bag_reclaim=bags)
     onward = onward_to(destination)

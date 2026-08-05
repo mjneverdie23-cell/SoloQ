@@ -1,0 +1,50 @@
+{
+  "id": "dxb_12h_halfday",
+  "note": "SPEC.md \u00a75.3 worked example. Single ticket, entry point, daytime.",
+  "price_eur": 512.0,
+  "baseline_price_eur": 690.0,
+  "layover_plan_cost_eur": 38.0,
+  "is_single_ticket": true,
+  "outbound": [
+    {
+      "carrier": "EK",
+      "flight_number": "EK160",
+      "origin": "OSL",
+      "destination": "DXB",
+      "departure_local": "2026-08-31T23:40:00+02:00",
+      "arrival_local": "2026-09-01T08:00:00+04:00",
+      "is_international": true
+    },
+    {
+      "carrier": "EK",
+      "flight_number": "EK384",
+      "origin": "DXB",
+      "destination": "BKK",
+      "departure_local": "2026-09-01T20:00:00+04:00",
+      "arrival_local": "2026-09-02T05:05:00+07:00",
+      "is_international": true
+    }
+  ],
+  "inbound": [
+    {
+      "carrier": "TG",
+      "flight_number": "TG954",
+      "origin": "BKK",
+      "destination": "OSL",
+      "departure_local": "2026-09-16T01:10:00+07:00",
+      "arrival_local": "2026-09-16T07:40:00+02:00",
+      "is_international": true
+    }
+  ],
+  "expected": {
+    "hub_iata": "DXB",
+    "gross_minutes": 720,
+    "usable_minutes": 375,
+    "open_hours_minutes": 375,
+    "window_start_local": "2026-09-01T09:30:00+04:00",
+    "window_end_local": "2026-09-01T15:45:00+04:00",
+    "band": "HALF_DAY",
+    "score": 70,
+    "blocked_reasons": []
+  }
+}

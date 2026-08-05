@@ -1,0 +1,50 @@
+{
+  "id": "waw_outbound_osl_bkk",
+  "note": "OSL->WAW->BKK. Not an entry point, but leaving Schengen costs the full buffer (\u00a75.1).",
+  "price_eur": 486.0,
+  "baseline_price_eur": 645.0,
+  "layover_plan_cost_eur": 30.0,
+  "is_single_ticket": true,
+  "outbound": [
+    {
+      "carrier": "LO",
+      "flight_number": "LO462",
+      "origin": "OSL",
+      "destination": "WAW",
+      "departure_local": "2026-09-01T06:15:00+02:00",
+      "arrival_local": "2026-09-01T08:00:00+02:00",
+      "is_international": true
+    },
+    {
+      "carrier": "LO",
+      "flight_number": "LO77",
+      "origin": "WAW",
+      "destination": "BKK",
+      "departure_local": "2026-09-01T20:00:00+02:00",
+      "arrival_local": "2026-09-02T11:20:00+07:00",
+      "is_international": true
+    }
+  ],
+  "inbound": [
+    {
+      "carrier": "TG",
+      "flight_number": "TG954",
+      "origin": "BKK",
+      "destination": "OSL",
+      "departure_local": "2026-09-16T01:10:00+07:00",
+      "arrival_local": "2026-09-16T07:40:00+02:00",
+      "is_international": true
+    }
+  ],
+  "expected": {
+    "hub_iata": "WAW",
+    "gross_minutes": 720,
+    "usable_minutes": 430,
+    "open_hours_minutes": 430,
+    "window_start_local": "2026-09-01T08:40:00+02:00",
+    "window_end_local": "2026-09-01T15:50:00+02:00",
+    "band": "HALF_DAY",
+    "score": 77,
+    "blocked_reasons": []
+  }
+}
