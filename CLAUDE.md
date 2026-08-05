@@ -100,7 +100,7 @@ test_short_layover_gate     150 min gross → score == 0,
                             blocked_reason is not None
 
 test_night_arrival          layover 22:00–10:00 local, 12h gross
-                            → daylight_minutes < 120,
+                            → open_hours_minutes < 120,
                               band != "HALF_DAY"
 
 test_negative_saving        plan cost > fare saving

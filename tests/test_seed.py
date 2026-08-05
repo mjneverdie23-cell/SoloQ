@@ -45,6 +45,15 @@ def test_every_hub_has_an_airport(conn):
     assert {hub["iata"] for hub in rows(conn, "hub")} <= airports
 
 
+def test_foreign_keys_are_on_for_every_connection(tmp_path):
+    # The pragma is per-connection, not per-database: a second connection would
+    # silently lose it if connect() were not the only way one gets opened.
+    for _ in range(2):
+        other = connect(tmp_path / "layover.db")
+        assert other.execute("PRAGMA foreign_keys").fetchone()[0] == 1
+        other.close()
+
+
 def test_hub_without_an_airport_is_rejected(conn):
     # A complete DXB row renamed, so the foreign key is the only thing wrong
     # with it — a partial row would trip NOT NULL first and pass for free.

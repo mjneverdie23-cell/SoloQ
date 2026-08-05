@@ -117,10 +117,11 @@ class Layover:
     departure: datetime
     gross_minutes: int
     usable_minutes: int            # after all deductions, §5
-    daylight_minutes: int          # overlap of usable window with local 08:00-21:00
+    open_hours_minutes: int        # overlap of city window with local 08:00-21:00
     is_entry_point: bool           # do we clear immigration here?
     requires_bag_reclaim: bool
-    band: str                      # NO_EXIT | QUICK | HALF_DAY | FULL_DAY | OVERNIGHT
+    band: str                      # NO_EXIT | QUICK | HALF_DAY | FULL_DAY
+                                   # | OVERNIGHT | OVERNIGHT_NIGHT_ARRIVAL (§5.4)
     score: int                     # 0-100
     blocked_reason: str | None
 
@@ -159,20 +160,39 @@ def recheck_buffer(hub: Hub, onward: Segment, schengen_airports: frozenset[str])
     return hub.recheck_buffer_minutes
 
 
+def city_window(
+    lay: Layover, hub: Hub, onward: Segment, schengen_airports: frozenset[str]
+) -> tuple[datetime, datetime]:
+    start = lay.arrival + timedelta(minutes=(
+        hub.disembark_minutes
+        + (hub.immigration_minutes if lay.is_entry_point else 0)
+        + (30 if lay.requires_bag_reclaim else 0)
+        + hub.transfer_minutes
+    ))
+    end = lay.departure - timedelta(minutes=(
+        recheck_buffer(hub, onward, schengen_airports)
+        + hub.transfer_minutes
+        + SAFETY_MARGIN               # protects the return, not the arrival
+    ))
+    return start, end
+
+
 def usable_minutes(
     lay: Layover, hub: Hub, onward: Segment, schengen_airports: frozenset[str]
 ) -> int:
-    m = lay.gross_minutes
-    m -= hub.disembark_minutes
-    if lay.is_entry_point:
-        m -= hub.immigration_minutes
-    if lay.requires_bag_reclaim:
-        m -= 30
-    m -= hub.transfer_minutes * 2
-    m -= recheck_buffer(hub, onward, schengen_airports)
-    m -= SAFETY_MARGIN            # 45
-    return max(0, m)
+    start, end = city_window(lay, hub, onward, schengen_airports)
+    return max(0, floor_minutes(end - start))
 ```
+
+`usable_minutes` is *derived* from the window, not computed alongside it. The two
+are algebraically identical — `end - start` expands to exactly the old list of
+deductions — and computing them separately is how `exit_control_minutes` and
+`recheck_buffer_minutes` came to disagree. The equality is asserted in the test
+suite so a future edit to one cannot silently diverge from the other.
+
+The endpoints are also the product. *"Leave the airport around 23:55, be back by
+05:15"* is the sentence a traveller acts on; `usable_minutes` is an internal
+scoring number.
 
 The Schengen airport set is passed in, not read from a module-level lookup. It
 comes from `load_schengen_airports(conn)` in `app/geo.py`, called once at the
@@ -230,6 +250,8 @@ dataset — surface it prominently.
 | `FULL_DAY` | 660–1079 | Full itinerary + optional day-use hotel. |
 | `OVERNIGHT` | ≥ 1080 | Accommodation required; plan around sleep. |
 
+§5.4 can override any of these with a sixth value, `OVERNIGHT_NIGHT_ARRIVAL`.
+
 **A 12-hour layover typically lands in `HALF_DAY`, not `FULL_DAY`.** Worked
 example, DXB, 12h gross, single ticket, entry point:
 
@@ -241,16 +263,26 @@ example, DXB, 12h gross, single ticket, entry point:
 Six and a quarter hours. This is the headline finding and the product must never
 imply otherwise.
 
-### 5.4 Daylight overlay
+### 5.4 Open-hours overlay
 
-Clock time matters more than duration. Compute the overlap of the usable window
-with local 08:00–21:00.
+Clock time matters more than duration. Compute the overlap of the city window
+(§5.1) with local `CITY_OPEN_LOCAL`–`CITY_CLOSE_LOCAL`, flat at 08:00–21:00.
 
 ```python
-if daylight_minutes < 120:
+if open_hours_minutes < 120:
     if usable >= 480: band = "OVERNIGHT_NIGHT_ARRIVAL"   # bed, not sightseeing
     else:             band = "NO_EXIT"                    # nothing is open
 ```
+
+This is *open hours*, not daylight, and the distinction is why the flat constant
+is defensible. Riga in December gets sunlight roughly 09:00–15:30, and RIX and
+WAW are a third of the hubs — as a daylight model 08:00–21:00 would simply be
+wrong. But museums keep the same hours in December, and "when the city is awake
+and things are open" is what the rule actually means. It is a coarse pre-filter;
+§9's per-activity `opens_local` / `closes_local` refines it at step 10. No solar
+calculation, no per-hub variation, no timezone table — the `Layover` endpoints
+are tz-aware and localised to the hub, so the local wall-clock hour is already
+on the datetime.
 
 A 22:00–10:00 layover is a hotel opportunity, not a sightseeing one. An
 08:00–20:00 layover is the reverse. Same duration, opposite plan.
@@ -264,7 +296,7 @@ is all the 08:00–21:00 overlap needs.
 ```python
 WEIGHTS = {
     "usable":     0.30,   # normalised against 720 min, capped
-    "daylight":   0.20,   # normalised against 480 min, capped
+    "open_hours": 0.20,   # normalised against 480 min, capped
     "access":     0.20,   # 1 - (transfer_minutes / 90), floored at 0
     "entry_ease": 0.20,   # schengen_internal 1.0 | visa_free 0.9 | voa 0.6
                           # | evisa 0.3 | visa_required 0.0
@@ -356,7 +388,7 @@ specific branch of the scoring logic:
 | `dxb_12h_halfday` | §5.3 worked example → 375, `HALF_DAY` |
 | `waw_inbound_bkk_osl` | Schengen entry point, no bag reclaim, 120 buffer |
 | `waw_outbound_osl_bkk` | Not an entry point, but 180 buffer — the §5.1 rule |
-| `ist_night_2200_1000` | Daylight gate → not `HALF_DAY` despite 12h gross |
+| `ist_night_2200_1000` | Open-hours gate → `NO_EXIT` despite 12h gross |
 | `doh_150min` | Hard gate → score 0, `blocked_reason` set |
 | `rix_22h_overnight` | `OVERNIGHT` band |
 | `dxb_selftransfer_bags` | Bag reclaim penalty, `is_single_ticket: False` |
@@ -426,8 +458,9 @@ are testable; generated ones are not.
 3. Entry-point logic → verify: BKK→WAW→OSL marks WAW as entry point;
    OSL→WAW→BKK does not.
 
-4. Daylight overlay (§5.4) → verify: a layover 22:00–10:00 local with 12h gross
-   yields daylight_minutes < 120 and a band that is not HALF_DAY.
+4. Open-hours overlay (§5.4) → verify: ist_night_2200_1000, a layover
+   22:00–10:00 local with 12h gross, gives a city window of 23:55–05:15,
+   usable 320, open_hours_minutes 0, band NO_EXIT.
 
 5. Scoring + hard gates → verify: a 150-minute layover scores 0 with
    blocked_reason set; a visa_required rule scores 0 regardless of duration.

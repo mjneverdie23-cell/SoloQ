@@ -5,7 +5,15 @@ import pytest
 
 from app.db import connect
 from app.geo import load_schengen_airports
-from app.layover import band, is_entry_point, recheck_buffer, usable_minutes
+from app.layover import (
+    band,
+    city_window,
+    duration_band,
+    is_entry_point,
+    open_hours_minutes,
+    recheck_buffer,
+    usable_minutes,
+)
 from app.models import Hub, Layover, Segment
 from app.seed import load_seed
 
@@ -83,7 +91,11 @@ def test_dxb_12h_halfday(hubs, schengen):
 
     usable = usable_minutes(lay, hubs["DXB"], onward_to("BKK"), schengen)
     assert usable == 375
-    assert band(usable) == "HALF_DAY"
+
+    start, end = city_window(lay, hubs["DXB"], onward_to("BKK"), schengen)
+    assert (start.hour, start.minute) == (9, 30)    # 08:00 + 25 + 35 + 30
+    assert (end.hour, end.minute) == (15, 45)       # 20:00 - 180 - 30 - 45
+    assert band(usable, open_hours_minutes(start, end)) == "HALF_DAY"
 
 
 def test_schengen_entry_inbound(hubs, schengen):
@@ -116,7 +128,9 @@ def test_waw_inbound_is_the_best_case_in_the_set(hubs, schengen):
     usable = usable_minutes(lay, hubs["WAW"], onward_to("OSL"), schengen)
     # 720 - 15 disembark - 30 immigration - 50 transfer - 120 recheck - 45 margin
     assert usable == 460
-    assert band(usable) == "HALF_DAY"
+
+    start, end = city_window(lay, hubs["WAW"], onward_to("OSL"), schengen)
+    assert band(usable, open_hours_minutes(start, end)) == "HALF_DAY"
 
 
 def test_waw_inbound_keeps_the_shorter_buffer(hubs, schengen):
@@ -171,7 +185,7 @@ def test_usable_minutes_floors_at_zero(hubs, schengen):
     )
     usable = usable_minutes(lay, hubs["DOH"], onward_to("BKK"), schengen)
     assert usable == 0
-    assert band(usable) == "NO_EXIT"
+    assert duration_band(usable) == "NO_EXIT"
 
 
 @pytest.mark.parametrize(
@@ -189,4 +203,95 @@ def test_usable_minutes_floors_at_zero(hubs, schengen):
     ],
 )
 def test_band_boundaries(usable, expected):
-    assert band(usable) == expected
+    assert duration_band(usable) == expected
+
+
+def test_night_arrival(hubs, schengen):
+    """ist_night_2200_1000 — a twelve-hour layover worth nothing.
+
+    Arrive 22:00, depart 10:00. The city window lands entirely in the small
+    hours, so the duration says HALF_DAY and §5.4 correctly says otherwise.
+    """
+    lay = layover_at(
+        "IST", "Europe/Istanbul", 22, 720, is_entry_point=True, requires_bag_reclaim=False
+    )
+    start, end = city_window(lay, hubs["IST"], onward_to("BKK"), schengen)
+    usable = usable_minutes(lay, hubs["IST"], onward_to("BKK"), schengen)
+    open_hours = open_hours_minutes(start, end)
+
+    assert (start.hour, start.minute) == (23, 55)   # 22:00 + 25 + 30 + 60
+    assert (end.hour, end.minute) == (5, 15)        # 10:00 - 180 - 60 - 45
+    assert usable == 320
+    assert open_hours == 0
+    assert duration_band(usable) == "QUICK"         # what duration alone claims
+    assert band(usable, open_hours) == "NO_EXIT"    # what §5.4 knows
+
+
+def test_long_night_layover_is_a_bed_not_a_gate(hubs, schengen):
+    """§5.4's other branch: nothing open, but long enough that a hotel is the plan.
+
+    Arrive 20:00, depart 09:00. The window is 21:07–05:50, which clears the
+    480-minute floor without touching a single open hour.
+    """
+    lay = layover_at(
+        "RIX", "Europe/Riga", 20, 780, is_entry_point=True, requires_bag_reclaim=False
+    )
+    start, end = city_window(lay, hubs["RIX"], onward_to("OSL"), schengen)
+    usable = usable_minutes(lay, hubs["RIX"], onward_to("OSL"), schengen)
+    open_hours = open_hours_minutes(start, end)
+
+    assert open_hours < 120
+    assert usable >= 480
+    assert band(usable, open_hours) == "OVERNIGHT_NIGHT_ARRIVAL"
+
+
+def test_open_hours_counts_only_the_08_to_21_overlap():
+    """A window straddling the close: 18:00–23:00 local contributes three hours."""
+    tz = ZoneInfo("Europe/Warsaw")
+    start = datetime(2026, 9, 1, 18, 0, tzinfo=tz)
+    assert open_hours_minutes(start, start + timedelta(hours=5)) == 180
+
+
+def test_open_hours_spans_multiple_days():
+    """A 30-hour window collects two separate open-hours blocks, not one."""
+    tz = ZoneInfo("Europe/Warsaw")
+    start = datetime(2026, 9, 1, 12, 0, tzinfo=tz)
+    # 12:00-21:00 today (540) + 08:00-18:00 tomorrow (600).
+    assert open_hours_minutes(start, start + timedelta(hours=30)) == 540 + 600
+
+
+def _usable_by_deduction_list(lay, hub, onward, schengen):
+    """The pre-refactor §5.1 form, recomputed independently of city_window."""
+    m = lay.gross_minutes
+    m -= hub.disembark_minutes
+    if lay.is_entry_point:
+        m -= hub.immigration_minutes
+    if lay.requires_bag_reclaim:
+        m -= 30
+    m -= hub.transfer_minutes * 2
+    m -= recheck_buffer(hub, onward, schengen)
+    m -= 45
+    return max(0, m)
+
+
+@pytest.mark.parametrize("hub_iata,tz", [
+    ("IST", "Europe/Istanbul"), ("DOH", "Asia/Qatar"), ("DXB", "Asia/Dubai"),
+    ("AUH", "Asia/Dubai"), ("WAW", "Europe/Warsaw"), ("RIX", "Europe/Riga"),
+])
+@pytest.mark.parametrize("gross", [150, 480, 720, 1320])
+@pytest.mark.parametrize("entry", [True, False])
+@pytest.mark.parametrize("bags", [True, False])
+@pytest.mark.parametrize("destination", ["OSL", "BKK"])
+def test_window_delta_equals_the_deduction_list(
+    hubs, schengen, hub_iata, tz, gross, entry, bags, destination
+):
+    """SPEC.md §5.1: the two forms are algebraically identical.
+
+    usable_minutes is derived from city_window now. If a future edit moves a
+    term into one and not the other, this is what catches it.
+    """
+    lay = layover_at(hub_iata, tz, 8, gross, is_entry_point=entry, requires_bag_reclaim=bags)
+    onward = onward_to(destination)
+    assert usable_minutes(lay, hubs[hub_iata], onward, schengen) == _usable_by_deduction_list(
+        lay, hubs[hub_iata], onward, schengen
+    )

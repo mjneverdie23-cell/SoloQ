@@ -1,10 +1,17 @@
-"""Layover computation — SPEC.md §5.1 and §5.3."""
+"""Layover computation — SPEC.md §5.1, §5.3 and §5.4."""
+
+from datetime import datetime, time, timedelta
 
 from app.models import Hub, Layover, Segment
 
 SAFETY_MARGIN = 45
 BAG_RECLAIM_MINUTES = 30
 LEAVING_SCHENGEN_BUFFER = 180
+
+CITY_OPEN_LOCAL = 8
+CITY_CLOSE_LOCAL = 21
+OPEN_HOURS_FLOOR = 120        # below this, sightseeing is not the plan
+NIGHT_OVERNIGHT_FLOOR = 480   # ...but a bed still is, if the layover is long
 
 
 def is_entry_point(
@@ -32,24 +39,57 @@ def recheck_buffer(hub: Hub, onward: Segment, schengen_airports: frozenset[str])
     return hub.recheck_buffer_minutes
 
 
+def city_window(
+    lay: Layover, hub: Hub, onward: Segment, schengen_airports: frozenset[str]
+) -> tuple[datetime, datetime]:
+    """SPEC.md §5.1. When the traveller is actually outside the airport.
+
+    These timestamps are what a traveller acts on — "leave around 23:55, be back
+    by 05:15". usable_minutes is the internal number derived from them.
+    """
+    start = lay.arrival + timedelta(
+        minutes=(
+            hub.disembark_minutes
+            + (hub.immigration_minutes if lay.is_entry_point else 0)
+            + (BAG_RECLAIM_MINUTES if lay.requires_bag_reclaim else 0)
+            + hub.transfer_minutes
+        )
+    )
+    end = lay.departure - timedelta(
+        minutes=(
+            recheck_buffer(hub, onward, schengen_airports)
+            + hub.transfer_minutes
+            + SAFETY_MARGIN   # protects the return, not the arrival
+        )
+    )
+    return start, end
+
+
 def usable_minutes(
     lay: Layover, hub: Hub, onward: Segment, schengen_airports: frozenset[str]
 ) -> int:
-    """SPEC.md §5.1. Every deduction rounds against the traveller."""
-    m = lay.gross_minutes
-    m -= hub.disembark_minutes
-    if lay.is_entry_point:
-        m -= hub.immigration_minutes
-    if lay.requires_bag_reclaim:
-        m -= BAG_RECLAIM_MINUTES
-    m -= hub.transfer_minutes * 2
-    m -= recheck_buffer(hub, onward, schengen_airports)
-    m -= SAFETY_MARGIN
-    return max(0, m)
+    """SPEC.md §5.1, derived from the window so the two cannot drift apart."""
+    start, end = city_window(lay, hub, onward, schengen_airports)
+    return max(0, _floor_minutes(end - start))
 
 
-def band(usable: int) -> str:
-    """SPEC.md §5.3. The §5.4 daylight overlay can override this; not built yet."""
+def open_hours_minutes(start: datetime, end: datetime) -> int:
+    """SPEC.md §5.4. Overlap of the city window with local 08:00–21:00.
+
+    Open hours, not daylight: museums keep the same hours in a Riga December.
+    """
+    total = 0
+    day = start.date()
+    while day <= end.date():
+        opens = datetime.combine(day, time(CITY_OPEN_LOCAL), tzinfo=start.tzinfo)
+        closes = datetime.combine(day, time(CITY_CLOSE_LOCAL), tzinfo=start.tzinfo)
+        total += max(0, _floor_minutes(min(end, closes) - max(start, opens)))
+        day += timedelta(days=1)
+    return total
+
+
+def duration_band(usable: int) -> str:
+    """SPEC.md §5.3, on duration alone."""
     if usable < 180:
         return "NO_EXIT"
     if usable < 360:
@@ -59,3 +99,20 @@ def band(usable: int) -> str:
     if usable < 1080:
         return "FULL_DAY"
     return "OVERNIGHT"
+
+
+def band(usable: int, open_hours: int) -> str:
+    """SPEC.md §5.3 with the §5.4 overlay applied.
+
+    A 22:00–10:00 layover is a hotel opportunity, not a sightseeing one.
+    """
+    if open_hours < OPEN_HOURS_FLOOR:
+        if usable >= NIGHT_OVERNIGHT_FLOOR:
+            return "OVERNIGHT_NIGHT_ARRIVAL"
+        return "NO_EXIT"
+    return duration_band(usable)
+
+
+def _floor_minutes(delta: timedelta) -> int:
+    """Round down. Never credit a minute we cannot prove (hard rule 3)."""
+    return int(delta.total_seconds() // 60)
