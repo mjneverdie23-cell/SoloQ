@@ -1,0 +1,167 @@
+{
+  "_meta": {
+    "note": "SEED VALUES — plausible starting points, NOT verified. Every field must be checked against an official or first-party source and the verified_on date stamped before this data drives anything user-facing. See SPEC.md §7.",
+    "created": "2026-08-05",
+    "passport_scope": ["NO", "SE", "DK", "FI", "IS"]
+  },
+
+  "hubs": [
+    {
+      "iata": "IST",
+      "city": "Istanbul",
+      "country_iso2": "TR",
+      "is_schengen": false,
+      "transfer_minutes": 60,
+      "transfer_cost_eur": 1.80,
+      "transfer_mode": "metro",
+      "transfer_note": "M11 to Gayrettepe, change to M2 for Taksim/Sisli. New IST airport is ~40 km out — slowest transfer of the six.",
+      "disembark_minutes": 25,
+      "immigration_minutes": 30,
+      "exit_control_minutes": 25,
+      "recheck_buffer_minutes": 180,
+      "has_left_luggage": true,
+      "activity_density": 0.9
+    },
+    {
+      "iata": "DOH",
+      "city": "Doha",
+      "country_iso2": "QA",
+      "is_schengen": false,
+      "transfer_minutes": 25,
+      "transfer_cost_eur": 0.55,
+      "transfer_mode": "metro",
+      "transfer_note": "Doha Metro Red Line to Msheireb. Cheapest transfer in the set.",
+      "disembark_minutes": 20,
+      "immigration_minutes": 25,
+      "exit_control_minutes": 20,
+      "recheck_buffer_minutes": 180,
+      "has_left_luggage": true,
+      "activity_density": 0.6
+    },
+    {
+      "iata": "DXB",
+      "city": "Dubai",
+      "country_iso2": "AE",
+      "is_schengen": false,
+      "transfer_minutes": 30,
+      "transfer_cost_eur": 2.00,
+      "transfer_mode": "metro",
+      "transfer_note": "Red Line direct from T1 and T3. Note Friday morning reduced service.",
+      "disembark_minutes": 25,
+      "immigration_minutes": 35,
+      "exit_control_minutes": 25,
+      "recheck_buffer_minutes": 180,
+      "has_left_luggage": true,
+      "activity_density": 0.8
+    },
+    {
+      "iata": "AUH",
+      "city": "Abu Dhabi",
+      "country_iso2": "AE",
+      "is_schengen": false,
+      "transfer_minutes": 45,
+      "transfer_cost_eur": 1.00,
+      "transfer_mode": "bus",
+      "transfer_note": "Bus A1 to city centre. No metro. Taxi materially faster but ~20 EUR.",
+      "disembark_minutes": 25,
+      "immigration_minutes": 35,
+      "exit_control_minutes": 25,
+      "recheck_buffer_minutes": 180,
+      "has_left_luggage": true,
+      "activity_density": 0.5
+    },
+    {
+      "iata": "WAW",
+      "city": "Warsaw",
+      "country_iso2": "PL",
+      "is_schengen": true,
+      "transfer_minutes": 25,
+      "transfer_cost_eur": 1.10,
+      "transfer_mode": "train",
+      "transfer_note": "S2/S3 train or bus 175 to Centrum. Chopin airport is close in.",
+      "disembark_minutes": 15,
+      "immigration_minutes": 30,
+      "exit_control_minutes": 0,
+      "recheck_buffer_minutes": 120,
+      "has_left_luggage": true,
+      "activity_density": 0.7
+    },
+    {
+      "iata": "RIX",
+      "city": "Riga",
+      "country_iso2": "LV",
+      "is_schengen": true,
+      "transfer_minutes": 25,
+      "transfer_cost_eur": 1.50,
+      "transfer_mode": "bus",
+      "transfer_note": "Bus 22 to Old Town. Small airport, fast on foot.",
+      "disembark_minutes": 12,
+      "immigration_minutes": 30,
+      "exit_control_minutes": 0,
+      "recheck_buffer_minutes": 120,
+      "has_left_luggage": true,
+      "activity_density": 0.6
+    }
+  ],
+
+  "entry_rules": [
+    {
+      "passport_scope": "NORDIC",
+      "country_iso2": "PL",
+      "entry_type": "schengen_internal",
+      "max_stay_days": null,
+      "passport_validity_days": 0,
+      "notes": "No border control when arriving from within Schengen. Full immigration if the inbound leg originated outside Schengen — Warsaw is then the point of entry, not the final destination.",
+      "verified_on": null
+    },
+    {
+      "passport_scope": "NORDIC",
+      "country_iso2": "LV",
+      "entry_type": "schengen_internal",
+      "max_stay_days": null,
+      "passport_validity_days": 0,
+      "notes": "Same Schengen entry-point logic as PL.",
+      "verified_on": null
+    },
+    {
+      "passport_scope": "NORDIC",
+      "country_iso2": "TR",
+      "entry_type": "visa_free",
+      "max_stay_days": 90,
+      "passport_validity_days": 150,
+      "notes": "90 days within any 180. Passport validity requirement is 150 days — unusual and a real rejection cause. Confirm before launch.",
+      "verified_on": null
+    },
+    {
+      "passport_scope": "NORDIC",
+      "country_iso2": "QA",
+      "entry_type": "visa_free",
+      "max_stay_days": 90,
+      "passport_validity_days": 90,
+      "notes": "Free waiver issued at immigration for EU/Schengen nationals.",
+      "verified_on": null
+    },
+    {
+      "passport_scope": "NORDIC",
+      "country_iso2": "AE",
+      "entry_type": "visa_free",
+      "max_stay_days": 90,
+      "passport_validity_days": 180,
+      "notes": "Applies to both DXB and AUH. Six months passport validity is the commonly cited requirement.",
+      "verified_on": null
+    }
+  ],
+
+  "destinations": [
+    {"iata": "BKK", "city": "Bangkok",     "common_hubs": ["IST", "DOH", "DXB", "AUH"]},
+    {"iata": "SGN", "city": "Ho Chi Minh", "common_hubs": ["DOH", "DXB", "IST"]},
+    {"iata": "HAN", "city": "Hanoi",       "common_hubs": ["DOH", "DXB", "IST"]},
+    {"iata": "DPS", "city": "Bali",        "common_hubs": ["DOH", "DXB", "IST"]},
+    {"iata": "KUL", "city": "Kuala Lumpur","common_hubs": ["DOH", "DXB", "IST"]},
+    {"iata": "SIN", "city": "Singapore",   "common_hubs": ["DOH", "DXB", "IST"]},
+    {"iata": "DEL", "city": "Delhi",       "common_hubs": ["IST", "DOH", "AUH"]},
+    {"iata": "CMB", "city": "Colombo",     "common_hubs": ["DOH", "DXB", "AUH"]},
+    {"iata": "MNL", "city": "Manila",      "common_hubs": ["DOH", "DXB", "IST"]},
+    {"iata": "KTM", "city": "Kathmandu",   "common_hubs": ["DOH", "IST", "AUH"]}
+  ]
+}
