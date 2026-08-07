@@ -220,6 +220,24 @@
   }
   .callout small { color: var(--muted); font-size: 14px; }
 
+  ul.plan { list-style: none; margin: 22px 0 0; padding: 0; }
+  ul.plan li {
+    display: flex;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 11px 0;
+    border-bottom: 1px solid var(--rule);
+  }
+  ul.plan li:first-child { border-top: 1px solid var(--rule); }
+  ul.plan .what { font-size: 16px; }
+  ul.plan .cost {
+    font-family: var(--mono);
+    font-size: 14px;
+    color: var(--muted);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+
   .money { display: flex; flex-wrap: wrap; gap: 0; border-top: 1px solid var(--rule); margin: 0; }
   .money div {
     flex: 1 1 150px;
@@ -375,11 +393,18 @@
       <span class="when">Leave the airport 09:30 → be back by 15:45</span>
       <small>Local time in Dubai. Everything before and after belongs to the airport.</small>
     </div>
-    <!-- TODO(step 8): name the actual Dubai stops and times inside this window.
-         The page asks for EUR 7 for a plan nobody has seen an example of, and one
-         concrete line here would do more for conversion than anything else on the
-         page. It must come from SPEC.md section 9's curated activity rows — do not
-         invent stops. -->
+    <ul class="plan">
+      <li><span class="what">Abra across Dubai Creek</span><span class="cost">20 min · €0.25</span></li>
+      <li><span class="what">Spice Souk, Deira</span><span class="cost">35 min · free</span></li>
+      <li><span class="what">Dubai Museum, Al Fahidi Fort</span><span class="cost">75 min · €1.00</span></li>
+      <li><span class="what">Gold Souk, Deira</span><span class="cost">60 min · free</span></li>
+    </ul>
+    <p style="margin-top:18px">
+      221 minutes allocated of 375, including the walking between them. The other
+      154 are deliberate: a plan with no slack is a plan that makes you miss the
+      flight. The Dubai Fountain is not on the list because it starts at 18:00 and
+      you are back airside by then.
+    </p>
   </section>
 
   <section class="prose">
@@ -391,8 +416,8 @@
     </p>
     <dl class="money">
       <div><dt>Fare saved</dt><dd>€178</dd></div>
-      <div><dt>Day in Dubai</dt><dd>€38</dd></div>
-      <div><dt>Net</dt><dd>+€140</dd></div>
+      <div><dt>Metro + admissions</dt><dd>€5.25</dd></div>
+      <div><dt>Net</dt><dd>+€172.75</dd></div>
     </dl>
   </section>
 
@@ -428,9 +453,11 @@
       actual transfer and immigration times.
     </p>
     <p>
-      <strong>What is not:</strong> the fares. €512, €690 and the €38 day are
-      placeholders in a test fixture, not quotes. Entry requirements are always the
-      traveller's responsibility and must be confirmed with the carrier.
+      <strong>What is not:</strong> the fares. €512 and €690 are placeholders in a
+      test fixture, not quotes. The €5.25 counts the metro and the admissions and
+      nothing else — no food, which the model does not yet carry. Entry
+      requirements are always the traveller's responsibility and must be confirmed
+      with the carrier.
     </p>
   </footer>
 

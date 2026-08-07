@@ -30,6 +30,21 @@ CREATE TABLE IF NOT EXISTS hub (
     verified_on             TEXT
 );
 
+CREATE TABLE IF NOT EXISTS activity (
+    hub_iata                     TEXT    NOT NULL REFERENCES hub(iata),
+    name                         TEXT    NOT NULL,
+    lat                          REAL    NOT NULL,
+    lon                          REAL    NOT NULL,
+    interest                     REAL    NOT NULL,
+    minutes_needed               INTEGER NOT NULL,
+    cost_eur                     REAL    NOT NULL,
+    opens_local                  TEXT    NOT NULL,
+    closes_local                 TEXT    NOT NULL,
+    transfer_minutes_from_centre INTEGER NOT NULL,
+    verified_on                  TEXT,
+    PRIMARY KEY (hub_iata, name)
+);
+
 CREATE TABLE IF NOT EXISTS entry_rule (
     passport_scope          TEXT    NOT NULL,
     country_iso2            TEXT    NOT NULL,

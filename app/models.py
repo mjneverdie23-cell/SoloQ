@@ -6,7 +6,7 @@ steps that compute them.
 """
 
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, time
 
 
 @dataclass(frozen=True)
@@ -45,6 +45,32 @@ class EntryRule:
     passport_validity_days: int
     notes: str
     verified_on: date | None
+
+
+@dataclass(frozen=True)
+class Activity:
+    hub_iata: str
+    name: str
+    lat: float
+    lon: float
+    interest: float            # 0.0-1.0, hand-scored opinion, not measurement
+    minutes_needed: int
+    cost_eur: float
+    # A recurring daily clock rule, not an instant, so `time` and not
+    # `datetime` — hard rule 6 is about instants.
+    opens_local: time
+    closes_local: time
+    transfer_minutes_from_centre: int
+    verified_on: date | None
+
+    @property
+    def time_cost_minutes(self) -> int:
+        return self.minutes_needed + self.transfer_minutes_from_centre
+
+    @property
+    def interest_density(self) -> float:
+        """SPEC.md §9 sorts by interest per minute spent."""
+        return self.interest / self.time_cost_minutes
 
 
 @dataclass(frozen=True)

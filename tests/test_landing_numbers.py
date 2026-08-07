@@ -114,8 +114,13 @@ def test_headline_hours_match_usable_minutes():
 def test_money_figures_are_the_fixture_arithmetic():
     fare_saving = FIXTURE["baseline_price_eur"] - FIXTURE["price_eur"]
     assert money("Fare saved") == fare_saving
-    assert money("Day in Dubai") == FIXTURE["layover_plan_cost_eur"]
+    assert money("Metro + admissions") == FIXTURE["layover_plan_cost_eur"]
     assert money("Net") == fare_saving - FIXTURE["layover_plan_cost_eur"]
+
+
+def test_footer_admits_food_is_not_counted():
+    """€5.25 for a day would mislead without it. The model has no meal line."""
+    assert "no food, which the model does not yet carry" in PAGE
 
 
 def test_footer_names_the_placeholder_fares():
@@ -128,6 +133,14 @@ def test_demo_banner_is_present():
     assert "Demo data — these fares are not real" in PAGE
 
 
-def test_plan_contents_are_marked_todo_not_invented():
-    """The one gap on the page. It must come from §9's rows, not from me."""
-    assert "TODO(step 8)" in PAGE
+def test_plan_names_the_generated_stops():
+    """The stops are the §9 fill's actual output for this window, not a pick.
+
+    tests/test_plan.py pins the same four in the same order; if the generator
+    or the curated rows change, that test fails and this page is stale.
+    """
+    assert "TODO(step" not in PAGE
+    for stop in ("Abra across Dubai Creek", "Spice Souk, Deira",
+                 "Dubai Museum, Al Fahidi Fort", "Gold Souk, Deira"):
+        assert stop in PAGE, stop
+    assert "221 minutes allocated of 375" in PAGE

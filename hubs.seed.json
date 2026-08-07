@@ -106,6 +106,17 @@
     }
   ],
 
+  "activities": [
+    {"hub_iata": "DXB", "name": "Dubai Museum, Al Fahidi Fort",    "lat": 25.2632, "lon": 55.2972, "interest": 0.75, "minutes_needed":  75, "cost_eur":  1.00, "opens_local": "08:30", "closes_local": "20:30", "transfer_minutes_from_centre":  5, "verified_on": null},
+    {"hub_iata": "DXB", "name": "Al Fahidi Historical District",   "lat": 25.2637, "lon": 55.2983, "interest": 0.8, "minutes_needed":  90, "cost_eur":  0.00, "opens_local": "00:00", "closes_local": "23:59", "transfer_minutes_from_centre":  5, "verified_on": null},
+    {"hub_iata": "DXB", "name": "Abra across Dubai Creek",         "lat": 25.2626, "lon": 55.2971, "interest": 0.7, "minutes_needed":  20, "cost_eur":  0.25, "opens_local": "05:00", "closes_local": "23:59", "transfer_minutes_from_centre":  6, "verified_on": null},
+    {"hub_iata": "DXB", "name": "Gold Souk, Deira",                "lat": 25.2697, "lon": 55.2967, "interest": 0.65, "minutes_needed":  60, "cost_eur":  0.00, "opens_local": "10:00", "closes_local": "22:00", "transfer_minutes_from_centre": 10, "verified_on": null},
+    {"hub_iata": "DXB", "name": "Spice Souk, Deira",               "lat": 25.2661, "lon": 55.2975, "interest": 0.6, "minutes_needed":  35, "cost_eur":  0.00, "opens_local": "10:00", "closes_local": "22:00", "transfer_minutes_from_centre": 10, "verified_on": null},
+    {"hub_iata": "DXB", "name": "Burj Khalifa, At The Top",        "lat": 25.1972, "lon": 55.2744, "interest": 0.9, "minutes_needed": 105, "cost_eur": 40.00, "opens_local": "09:00", "closes_local": "23:00", "transfer_minutes_from_centre": 12, "verified_on": null},
+    {"hub_iata": "DXB", "name": "Dubai Fountain show",             "lat": 25.1959, "lon": 55.2748, "interest": 0.7, "minutes_needed":  30, "cost_eur":  0.00, "opens_local": "18:00", "closes_local": "23:00", "transfer_minutes_from_centre": 12, "verified_on": null},
+    {"hub_iata": "DXB", "name": "Dubai Frame, Zabeel Park",        "lat": 25.2354, "lon": 55.3007, "interest": 0.65, "minutes_needed":  75, "cost_eur": 12.50, "opens_local": "09:00", "closes_local": "21:00", "transfer_minutes_from_centre":  9, "verified_on": null}
+  ],
+
   "entry_rules": [
     {
       "passport_scope": "NORDIC",

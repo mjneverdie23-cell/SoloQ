@@ -231,3 +231,6 @@ def test_fixture_declares_its_placeholders(fixture):
     """Fares and baseline durations are stand-ins; step 10 replaces them together."""
     assert "baseline_duration_minutes" in fixture["_placeholders"]
     assert "baseline_price_eur" in fixture["_placeholders"]
+    # DXB's activity rows landed, so its plan cost is generated, not guessed.
+    generated = fixture["expected"]["hub_iata"] == "DXB"
+    assert ("layover_plan_cost_eur" in fixture["_placeholders"]) is not generated

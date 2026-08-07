@@ -31,6 +31,20 @@ HUB_COLUMNS = (
     "verified_on",
 )
 
+ACTIVITY_COLUMNS = (
+    "hub_iata",
+    "name",
+    "lat",
+    "lon",
+    "interest",
+    "minutes_needed",
+    "cost_eur",
+    "opens_local",
+    "closes_local",
+    "transfer_minutes_from_centre",
+    "verified_on",
+)
+
 ENTRY_RULE_COLUMNS = (
     "passport_scope",
     "country_iso2",
@@ -57,6 +71,7 @@ def load_seed(conn: sqlite3.Connection, seed_path: Path = SEED_PATH) -> None:
     _insert(conn, "airport", AIRPORT_COLUMNS, seed["airports"])
     _insert(conn, "hub", HUB_COLUMNS, seed["hubs"])
     _insert(conn, "entry_rule", ENTRY_RULE_COLUMNS, seed["entry_rules"])
+    _insert(conn, "activity", ACTIVITY_COLUMNS, seed["activities"])
     conn.commit()
 
 
@@ -65,7 +80,7 @@ if __name__ == "__main__":
     load_seed(conn)
     counts = [
         conn.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
-        for table in ("airport", "hub", "entry_rule")
+        for table in ("airport", "hub", "entry_rule", "activity")
     ]
     conn.close()
-    print("seeded {} airports, {} hubs, {} entry rules".format(*counts))
+    print("seeded {} airports, {} hubs, {} entry rules, {} activities".format(*counts))
