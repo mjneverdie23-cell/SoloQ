@@ -283,15 +283,32 @@ def test_ist_plan_over_the_negative_saving_window(ist_plan):
 
 
 def test_ist_excludes_the_sunset_ferry(ist, ist_plan):
-    """The excluded row: the ferry sails at 17:30 and the window shuts at 15:15.
+    """The ferry sails at 17:30; the fixture window shuts at 15:15.
 
-    Closed-not-chosen, so it proves the fill filters rather than merely runs.
+    At the fixture window this is over-determined: the ferry is shut *and*
+    costs 118 minutes against 61 left in the budget, so removing the
+    opening-hours filter changes nothing and an assertion here proves only that
+    the ferry is absent, not that the filter did it. The second window below is
+    long enough that budget is not binding, which is what makes closure the
+    load-bearing reason — remove the filter and the ferry enters the plan.
     """
-    rows, _ = ist
+    rows, hub = ist
     ferry = next(a for a in rows if "sunset ferry" in a.name)
     assert ferry.opens_local == time(17, 30)
     assert is_open_during(ferry, *IST_WINDOW, ISTANBUL) is False
     assert ferry not in ist_plan.items
+
+    roomy = (
+        datetime(2026, 9, 1, 4, 50, tzinfo=ISTANBUL),
+        datetime(2026, 9, 1, 17, 0, tzinfo=ISTANBUL),
+    )
+    plan = fill(rows, hub, *roomy, ISTANBUL)
+    # Everything ranked above the ferry is taken and there is still room for it.
+    assert plan.allocated_minutes + ferry.time_cost_minutes <= int(
+        plan.usable_minutes * ALLOCATION_CEILING
+    )
+    assert is_open_during(ferry, *roomy, ISTANBUL) is False
+    assert ferry not in plan.items
 
 
 def test_ist_night_window_reaches_nothing(ist):
