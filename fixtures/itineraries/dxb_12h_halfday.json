@@ -1,6 +1,12 @@
 {
   "id": "dxb_12h_halfday",
   "note": "SPEC.md \u00a75.3 worked example. Single ticket, entry point, daytime.",
+  "_placeholders": [
+    "price_eur",
+    "baseline_price_eur",
+    "baseline_duration_minutes",
+    "layover_plan_cost_eur"
+  ],
   "price_eur": 512.0,
   "baseline_price_eur": 690.0,
   "baseline_duration_minutes": 965,

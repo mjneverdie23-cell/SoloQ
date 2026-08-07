@@ -65,7 +65,7 @@ def fare_source() -> FareSource:
     if name == "fixture":
         return FixtureSource()
     if name == "amadeus":
-        raise NotImplementedError("AmadeusSource is step 9")
+        raise NotImplementedError("AmadeusSource is step 10")
     raise ValueError(f"unknown FARE_SOURCE {name!r}")
 
 

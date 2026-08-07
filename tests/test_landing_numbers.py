@@ -130,4 +130,4 @@ def test_demo_banner_is_present():
 
 def test_plan_contents_are_marked_todo_not_invented():
     """The one gap on the page. It must come from §9's rows, not from me."""
-    assert "TODO(step 10)" in PAGE
+    assert "TODO(step 8)" in PAGE

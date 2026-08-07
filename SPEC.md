@@ -90,6 +90,31 @@ class EntryRule:
     notes: str
     verified_on: date | None       # null until checked — gates rendering, see §7
 
+@dataclass
+class Activity:
+    hub_iata: str                  # FK to hub
+    name: str
+    lat: float
+    lon: float
+    interest: float                # 0.0-1.0, hand-scored editorial judgement
+    minutes_needed: int
+    cost_eur: float
+    opens_local: time              # a daily clock rule, not an instant
+    closes_local: time
+    transfer_minutes_from_centre: int
+    verified_on: date | None       # opening hours go stale — see §7
+
+@dataclass
+class Plan:
+    hub_iata: str
+    window_start: datetime         # tz-aware, the §5.1 city window
+    window_end: datetime
+    items: list[Activity]          # in visit order
+    usable_minutes: int            # @property, off the window
+    allocated_minutes: int         # @property, activity time + transfers
+    cost_eur: float                # @property
+    slack_minutes: int             # @property, usable - allocated
+
 # --- Fare data (fetched) ---
 
 @dataclass
@@ -146,7 +171,19 @@ negative the itinerary is honestly worse and we say so.
 All three headline figures are derived from the five stored ones, so they are
 properties (hard rule 7). `extra_hours` needs `baseline_duration_minutes`,
 which the fixtures carry alongside `baseline_price_eur` as a hand-set
-placeholder; the real one comes from Amadeus at step 9.
+placeholder; the real one comes from Amadeus at step 10.
+
+`opens_local` and `closes_local` are `time`, not `datetime`, and that is not a
+hard rule 6 violation: they are a recurring daily rule rather than an instant,
+resolved against a date in the hub's zone when the fill runs. `Plan`'s four
+figures are all derived from the window and the items, so they are properties
+(hard rule 7).
+
+`Activity.interest` is not in §9's prose field list, but §9's fill sorts by
+"density of interest / time cost" and nothing else supplies it — the same defect
+as the `terminal_change` penalty that had no field to read. It is declared here,
+and like `hub.activity_density` it is editorial judgement rather than
+measurement.
 
 A hub is an airport with extra operational data. `city`, `country_iso2` and
 `is_schengen` are airport facts and live only on `Airport` — duplicating them on
@@ -296,7 +333,7 @@ is defensible. Riga in December gets sunlight roughly 09:00–15:30, and RIX and
 WAW are a third of the hubs — as a daylight model 08:00–21:00 would simply be
 wrong. But museums keep the same hours in December, and "when the city is awake
 and things are open" is what the rule actually means. It is a coarse pre-filter;
-§9's per-activity `opens_local` / `closes_local` refines it at step 10. No solar
+§9's per-activity `opens_local` / `closes_local` refines it at step 8. No solar
 calculation, no per-hub variation, no timezone table — the `Layover` endpoints
 are tz-aware and localised to the hub, so the local wall-clock hour is already
 on the datetime.
@@ -368,7 +405,7 @@ short" will go and find a longer one, then hit the visa wall they were never
 shown. That is why `blocked_reasons` is a list.
 
 Passport validity is **not** a gate. We cannot check it, so zeroing a score on
-it would imply that we had. It is a user-confirmed checkbox at step 8.
+it would imply that we had. It is a user-confirmed checkbox at step 9.
 
 **A blocked layover is not a dropped itinerary.** The flight is still real and
 still cheap; it is the city trip that is blocked. The fare saving and the
@@ -449,7 +486,7 @@ class FareSource(Protocol):
     def search(self, origin: str, dest: str, depart: date) -> list[Itinerary]: ...
 
 class FixtureSource:   # reads fixtures/itineraries/*.json
-class AmadeusSource:   # step 8
+class AmadeusSource:   # step 10
 ```
 
 Selected by `FARE_SOURCE=fixture|amadeus`, defaulting to `fixture`. The scoring
@@ -481,7 +518,7 @@ floor. It takes 23 hours to reach a band whose name implies a night. That is the
 
 Each fixture carries its own baseline fare and a hard-coded
 `layover_plan_cost_eur`, so the `Comparison` calculation works end to end at
-step 7 without waiting for §9's activity rows, which are step 10. Each holds
+step 7 without waiting for §9's activity rows, which are step 8. Each holds
 exactly one layover, so its `expected` block is unambiguous. Each also carries an `expected` block — band, usable minutes, score —
 and the suite asserts computed output against it. The block carries the **city
 window endpoints**, not only durations: moving `SAFETY_MARGIN` from the end of
@@ -564,19 +601,32 @@ are testable; generated ones are not.
 7. Comparison calculation → verify: ist_negative_saving yields
    net_saving_eur < 0, and the UI says so plainly.
 
-8. Jinja result page → verify: renders all 8 fixtures without error, each with
-   band, usable hours, return-by time, plan, comparison and the §8.3 banner.
+8. Plan generation (§9) → verify: the curated activity rows load, and a greedy
+   fill over the DXB worked example's window returns a plan that fits inside
+   it, drops anything closed, and leaves at least 20% slack.
 
-9. AmadeusSource + call counter → verify: parses a live response into the same
-   Itinerary shape, counter increments, refuses to fire at quota.
+9. Sort + Jinja result page → verify: renders all 8 fixtures without error,
+   each with band, usable hours, return-by time, plan, comparison and the §8.3
+   banner; blocked layovers appear in a "no city trip possible" group rather
+   than being filtered out (§5.6).
 
-10. Nightly batch writing to SQLite → verify: one full run completes under the
+10. AmadeusSource + call counter → verify: parses a live response into the same
+    Itinerary shape, counter increments, refuses to fire at quota.
+
+11. Nightly batch writing to SQLite → verify: one full run completes under the
     call budget and populates results.
 
-11. Itinerary import (§13) → verify: the bgo_alg_out_of_scope fixture parses,
+12. Itinerary import (§13) → verify: the bgo_alg_out_of_scope fixture parses,
     yields user_filtered_stops [1, 2], carries no ucs, and lands in the
     no_hub_data state rather than crashing or scoring an unknown hub.
 ```
+
+Plan generation comes **before** the UI, not after. The renderer's shape follows
+the thing it renders: building it against a hand-written plan blob and then
+discovering the generator emits something structurally different means doing it
+twice. It is also its own step rather than part of the UI — 48 curated rows plus
+a greedy fill with opening-hours intersection and slack management is an
+algorithm, and an algorithm and a renderer do not belong in one step.
 
 Do not proceed to step N+1 until step N's verification passes.
 
@@ -606,19 +656,19 @@ Building any of these is a spec violation, not initiative:
 
 ---
 
-## 12. Open questions to resolve before step 9
+## 12. Open questions to resolve before step 10
 
 1. Does Amadeus's terms of service permit displaying fares alongside third-party
    activity recommendations? Read them; this affects v1 monetisation.
 2. Is `is_single_ticket` reliably derivable from the Amadeus response, or does it
    need inference from `validatingAirlineCodes` and segment carriers? If the
    latter, that's an assumption to surface, not hide.
-3. What is the actual willingness to pay? Before step 8, put a landing page up
+3. What is the actual willingness to pay? Before step 9, put a landing page up
    with a fake "generate my plan — €7" button and count clicks.
 
 ---
 
-## 13. Itinerary import — step 11
+## 13. Itinerary import — step 12
 
 How a traveller gets their trip into the tool. Three input modes, in descending
 order of fidelity:
@@ -715,7 +765,7 @@ handling than the paths a stranger reaches only after getting lucky.
 
 With `FARE_SOURCE=fixture`, match a parsed route to the nearest fixture and
 render it, with the §8.3 banner still on. Paste-a-link is then demoable with
-zero network and zero quota, like everything else in steps 6–8.
+zero network and zero quota, like everything else in steps 6–9.
 
 ### 13.6 Fixture
 

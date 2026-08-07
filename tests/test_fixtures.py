@@ -73,7 +73,7 @@ def test_fixture_matches_its_expected_block(fixture, reference):
 
 @pytest.mark.parametrize("fixture", FIXTURES, ids=FIXTURE_IDS)
 def test_fixture_carries_a_baseline_and_a_plan_cost(fixture):
-    """Step 7's Comparison reads both; §9's activity rows are step 10."""
+    """Step 7's Comparison reads both; §9's activity rows are step 8."""
     assert fixture["baseline_price_eur"] > 0
     assert fixture["layover_plan_cost_eur"] >= 0
     # extra_hours divides by this; a missing or zero value would surface as a
@@ -160,6 +160,7 @@ def comparison_for(fixture):
         baseline_price_eur=fixture["baseline_price_eur"],
         baseline_duration_minutes=fixture["baseline_duration_minutes"],
         layover_plan_cost_eur=fixture["layover_plan_cost_eur"],
+        usable_minutes=fixture["expected"]["usable_minutes"],
     )
 
 
@@ -201,6 +202,32 @@ def test_extra_hours_is_none_per_hour_when_not_slower():
     """The rate is meaningless when the cheap routing is not actually slower."""
     from app.comparison import Comparison
 
-    same = Comparison(400.0, 500.0, 20.0, 900, 900)
+    same = Comparison(400.0, 500.0, 20.0, 900, 900, 0)
     assert same.extra_hours == 0
     assert same.euros_per_extra_hour is None
+    assert same.euros_per_dead_hour is None
+
+
+def test_dead_hours_are_the_honest_denominator():
+    """Usable hours are the product, not the cost — only dead hours are cost."""
+    fixture = next(f for f in FIXTURES if f["id"] == "dxb_12h_halfday")
+    c = comparison_for(fixture)
+    assert round(c.extra_hours, 2) == 8.33
+    assert round(c.dead_hours, 2) == 2.08          # 8.33 minus the 6.25 usable
+    assert c.euros_per_dead_hour > c.euros_per_extra_hour
+
+
+def test_dead_hours_guard_when_the_window_swallows_the_detour():
+    """A hub with a very short transfer could approach it; near-zero must not divide."""
+    from app.comparison import Comparison
+
+    c = Comparison(400.0, 500.0, 10.0, 1000, 900, 100)   # 1.67 extra, 1.67 usable
+    assert c.dead_hours == 0
+    assert c.euros_per_dead_hour is None
+
+
+@pytest.mark.parametrize("fixture", FIXTURES, ids=FIXTURE_IDS)
+def test_fixture_declares_its_placeholders(fixture):
+    """Fares and baseline durations are stand-ins; step 10 replaces them together."""
+    assert "baseline_duration_minutes" in fixture["_placeholders"]
+    assert "baseline_price_eur" in fixture["_placeholders"]

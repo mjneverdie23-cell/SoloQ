@@ -1,6 +1,12 @@
 {
   "id": "ist_negative_saving",
   "note": "Fare saving of 20 EUR against a 55 EUR plan. net_saving_eur is negative and must be said plainly.",
+  "_placeholders": [
+    "price_eur",
+    "baseline_price_eur",
+    "baseline_duration_minutes",
+    "layover_plan_cost_eur"
+  ],
   "price_eur": 640.0,
   "baseline_price_eur": 660.0,
   "baseline_duration_minutes": 955,
