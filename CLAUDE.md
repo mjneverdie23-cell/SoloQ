@@ -90,6 +90,16 @@ If a check fails, fix it before moving on. Don't accumulate broken steps.
    `hub.is_schengen` duplicated the airport table, and `gross_minutes` duplicated
    the layover endpoints. Two authorities for one fact is always the bug.
 
+8. **HTML authored as an artifact is a fragment, not a document.** Anything
+   drafted that way and then committed to this repo must be converted first:
+   `<!DOCTYPE html>`, `<html lang>`, `<head>`, `<meta charset>` and
+   `<meta name="viewport">`. The artifact host supplies that wrapper implicitly
+   and an exported file does not. Without the viewport tag phones render at
+   ~980px virtual width, so no `max-width` media query ever fires — on a page
+   whose audience is travellers holding phones. Artifact-only theme hooks
+   (`data-theme`) are dead in an exported file; delete whole rule blocks, never
+   just an opening line, and check that braces still balance afterwards.
+
 ---
 
 ## Test fixtures that must always pass

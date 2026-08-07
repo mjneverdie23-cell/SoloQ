@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Layover Planner — how much of that layover is actually yours?</title>
+<meta name="description" content="A 12-hour layover in Dubai is 6 hours and 15 minutes you can actually use. We work out the window, plan it, and tell you what it costs.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="You already bought this ticket">
+<meta property="og:description" content="A 12-hour layover in Dubai is 6 hours and 15 minutes you can actually use. Here is the arithmetic.">
+<meta property="og:site_name" content="Layover Planner">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="You already bought this ticket">
+<meta name="twitter:description" content="A 12-hour layover in Dubai is 6 hours and 15 minutes you can actually use. Here is the arithmetic.">
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+
+  :root {
+    --paper:   #EDF0F5;
+    --surface: #FFFFFF;
+    --ink:     #0D141C;
+    --muted:   #55617A;
+    --faint:   #7C88A0;
+    --eaten:   #AEB9C9;
+    --eaten-2: #C3CCD9;
+    --signal:  #A94D08;   /* 4.9:1 on --paper; the total row is 17px body text */
+    --on-signal: #FFF6EC; /* 5.3:1 on --signal */
+    --signal-soft: #F3E2D2;
+    --rule:    #D5DCE6;
+
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+
+    --measure: 66ch;
+    --wide: 940px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper:   #0B1017;
+      --surface: #131B25;
+      --ink:     #E6ECF4;
+      --muted:   #8494AC;
+      --faint:   #6B7A94;
+      --eaten:   #29343F;
+      --eaten-2: #1E2833;
+      --signal:  #F0A030;   /* 8.6:1 on --paper */
+      --on-signal: #1A1206; /* 8.6:1 on --signal */
+      --signal-soft: #2E2214;
+      --rule:    #223040;
+    }
+  }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 17px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .demo-bar {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--signal);
+    color: var(--on-signal);
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    text-align: center;
+    padding: 9px 16px;
+  }
+
+  .page {
+    max-width: var(--wide);
+    margin: 0 auto;
+    padding: 0 24px 96px;
+    display: flex;
+    flex-direction: column;
+    gap: 72px;
+  }
+  .prose { max-width: var(--measure); }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--faint);
+  }
+
+  .hero { padding-top: 72px; display: flex; flex-direction: column; gap: 20px; }
+  .hero h1 {
+    font-family: var(--serif);
+    font-weight: 400;
+    font-size: clamp(2.4rem, 6.2vw, 4rem);
+    line-height: 1.04;
+    letter-spacing: -0.018em;
+    text-wrap: balance;
+    margin: 0;
+  }
+  .hero h1 em { font-style: italic; color: var(--signal); }
+  .lede { font-size: clamp(1.05rem, 2.1vw, 1.3rem); color: var(--muted); max-width: 54ch; margin: 0; }
+
+  /* --- the strip: twelve hours, left to right, sized in minutes --- */
+  .strip-block { display: flex; flex-direction: column; gap: 14px; }
+  .strip {
+    display: grid;
+    grid-template-columns: 25fr 35fr 30fr 375fr 30fr 180fr 45fr;
+    height: 92px;
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    overflow: hidden;
+    background: var(--surface);
+  }
+  .seg {
+    position: relative;
+    transform-origin: left center;
+    background:
+      repeating-linear-gradient(
+        -45deg,
+        var(--eaten) 0 3px,
+        var(--eaten-2) 3px 7px
+      );
+  }
+  .seg + .seg { border-left: 1px solid var(--surface); }
+  .seg--usable {
+    background: var(--signal);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .seg--usable span {
+    font-family: var(--mono);
+    font-size: 13px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--on-signal);
+    white-space: nowrap;
+    padding: 0 8px;
+  }
+
+  .axis {
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--faint);
+    font-variant-numeric: tabular-nums;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .seg { animation: grow 620ms cubic-bezier(.2,.7,.3,1) both; }
+    .seg:nth-child(1) { animation-delay: 60ms; }
+    .seg:nth-child(2) { animation-delay: 150ms; }
+    .seg:nth-child(3) { animation-delay: 240ms; }
+    .seg:nth-child(4) { animation-delay: 900ms; animation-duration: 760ms; }
+    .seg:nth-child(5) { animation-delay: 330ms; }
+    .seg:nth-child(6) { animation-delay: 420ms; }
+    .seg:nth-child(7) { animation-delay: 510ms; }
+    @keyframes grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+  }
+
+  /* --- the ledger --- */
+  .ledger-wrap { overflow-x: auto; }
+  table.ledger {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--mono);
+    font-size: 14.5px;
+    font-variant-numeric: tabular-nums;
+    min-width: 460px;
+  }
+  table.ledger th {
+    text-align: left;
+    font-weight: 400;
+    font-size: 11.5px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--faint);
+    padding: 0 0 10px;
+    border-bottom: 1px solid var(--rule);
+  }
+  table.ledger td { padding: 9px 0; border-bottom: 1px solid var(--rule); }
+  table.ledger td.num { text-align: right; white-space: nowrap; }
+  table.ledger td.why { color: var(--muted); font-family: var(--sans); font-size: 14px; padding-left: 28px; }
+  tr.total td { border-bottom: none; padding-top: 16px; font-size: 17px; }
+  tr.total td.num, tr.total td:first-child { color: var(--signal); }
+
+  h2 {
+    font-family: var(--serif);
+    font-weight: 400;
+    font-size: clamp(1.6rem, 3.4vw, 2.1rem);
+    line-height: 1.15;
+    letter-spacing: -0.012em;
+    margin: 0 0 14px;
+    text-wrap: balance;
+  }
+  p { margin: 0 0 16px; }
+  p:last-child { margin-bottom: 0; }
+
+  .callout {
+    background: var(--surface);
+    border-left: 3px solid var(--signal);
+    padding: 22px 26px;
+    border-radius: 0 3px 3px 0;
+  }
+  .callout .when {
+    font-family: var(--mono);
+    font-size: clamp(1.1rem, 2.6vw, 1.45rem);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+    display: block;
+    margin-bottom: 8px;
+  }
+  .callout small { color: var(--muted); font-size: 14px; }
+
+  .money { display: flex; flex-wrap: wrap; gap: 0; border-top: 1px solid var(--rule); margin: 0; }
+  .money div {
+    flex: 1 1 150px;
+    padding: 18px 20px 18px 0;
+    border-bottom: 1px solid var(--rule);
+  }
+  .money dt {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--faint);
+    margin-bottom: 6px;
+  }
+  .money dd {
+    margin: 0;
+    font-family: var(--mono);
+    font-size: 1.5rem;
+    font-variant-numeric: tabular-nums;
+  }
+  .money div:last-child dd { color: var(--signal); }
+
+  /* --- the ask --- */
+  .ask { display: flex; flex-direction: column; gap: 18px; align-items: flex-start; }
+  button.cta {
+    font-family: var(--sans);
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--on-signal);
+    background: var(--signal);
+    border: none;
+    border-radius: 3px;
+    padding: 16px 30px;
+    cursor: pointer;
+    transition: transform 120ms ease, filter 120ms ease;
+  }
+  button.cta:hover { filter: brightness(1.08); }
+  button.cta:active { transform: translateY(1px); }
+  button.cta:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
+  @media (prefers-reduced-motion: reduce) { button.cta { transition: none; } }
+
+  .after-click {
+    background: var(--signal-soft);
+    border-radius: 3px;
+    padding: 24px 26px;
+    max-width: var(--measure);
+    width: 100%;
+  }
+  .after-click p { font-size: 16px; }
+
+  .capture { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+  .capture label {
+    flex: 1 1 100%;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .capture input {
+    flex: 1 1 240px;
+    min-width: 0;
+    font-family: var(--sans);
+    font-size: 1rem;
+    color: var(--ink);
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    padding: 13px 14px;
+  }
+  .capture input:focus-visible { outline: 2px solid var(--signal); outline-offset: 1px; }
+  .capture button {
+    font-family: var(--sans);
+    font-size: 1rem;
+    font-weight: 600;
+    background: var(--ink);
+    color: var(--paper);
+    border: none;
+    border-radius: 3px;
+    padding: 13px 22px;
+    cursor: pointer;
+  }
+  .capture button:focus-visible { outline: 3px solid var(--signal); outline-offset: 2px; }
+  .capture-note { font-size: 14px; color: var(--muted); margin: 12px 0 0; }
+  [hidden] { display: none !important; }
+
+  footer {
+    border-top: 1px solid var(--rule);
+    padding-top: 28px;
+    color: var(--muted);
+    font-size: 14.5px;
+    max-width: var(--measure);
+  }
+  footer strong { color: var(--ink); font-weight: 600; }
+
+  @media (max-width: 700px) {
+    .strip { grid-template-columns: 1fr; height: auto; }
+    .seg { height: 26px; transform-origin: left center; }
+    .seg--usable { height: 64px; }
+    .seg + .seg { border-left: none; border-top: 1px solid var(--surface); }
+    .axis { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="demo-bar">Demo data — these fares are not real</div>
+
+<div class="page">
+
+  <header class="hero">
+    <div class="eyebrow">OSL → DXB → BKK · 12h 00m on the ground in Dubai</div>
+    <h1>You already bought this ticket. <em>Six and a quarter hours</em> of it are actually yours.</h1>
+    <p class="lede">
+      Not twelve. Disembarking, immigration, two trips to the city and the check-in
+      buffer eat the rest before you have decided where to go.
+    </p>
+  </header>
+
+  <section class="strip-block" aria-label="How the twelve hours are spent">
+    <div class="strip" role="img" aria-label="Twelve hours split into: 25 minutes disembarking, 35 immigration, 30 transfer into the city, 375 minutes usable, 30 transfer back, 180 minutes check-in buffer, 45 minutes safety margin.">
+      <div class="seg" title="Disembark — 25 min"></div>
+      <div class="seg" title="Immigration — 35 min"></div>
+      <div class="seg" title="Airport to city — 30 min"></div>
+      <div class="seg seg--usable"><span>6h 15m yours</span></div>
+      <div class="seg" title="City to airport — 30 min"></div>
+      <div class="seg" title="Check-in buffer — 180 min"></div>
+      <div class="seg" title="Safety margin — 45 min"></div>
+    </div>
+    <div class="axis"><span>08:00 wheels down</span><span>20:00 wheels up</span></div>
+  </section>
+
+  <section class="ledger-wrap" aria-label="The arithmetic">
+    <table class="ledger">
+      <thead>
+        <tr><th>Where it goes</th><th class="num">Minutes</th><th class="why">&nbsp;</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Layover, gate to gate</td><td class="num">720</td><td class="why">The number on your ticket</td></tr>
+        <tr><td>Disembark</td><td class="num">−25</td><td class="why">Wheels down to the landside door</td></tr>
+        <tr><td>Immigration</td><td class="num">−35</td><td class="why">Dubai is where you enter, so you queue</td></tr>
+        <tr><td>Transfer, both ways</td><td class="num">−60</td><td class="why">Red Line, 30 minutes each way</td></tr>
+        <tr><td>Check-in buffer</td><td class="num">−180</td><td class="why">Be at the airport three hours before</td></tr>
+        <tr><td>Safety margin</td><td class="num">−45</td><td class="why">Because missing the flight costs more than the day</td></tr>
+        <tr class="total"><td>Actually yours</td><td class="num">375</td><td class="why">Six hours, fifteen minutes</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="prose">
+    <h2>The only two times that matter</h2>
+    <div class="callout">
+      <span class="when">Leave the airport 09:30 → be back by 15:45</span>
+      <small>Local time in Dubai. Everything before and after belongs to the airport.</small>
+    </div>
+    <!-- TODO(step 10): name the actual Dubai stops and times inside this window.
+         The page asks for EUR 7 for a plan nobody has seen an example of, and one
+         concrete line here would do more for conversion than anything else on the
+         page. It must come from SPEC.md section 9's curated activity rows — do not
+         invent stops. -->
+  </section>
+
+  <section class="prose">
+    <h2>Was the cheap ticket worth it?</h2>
+    <p>
+      The long layover saved you real money. A day in the city costs some of it back.
+      We show you the difference, including when it comes out negative — which it
+      sometimes does, and nobody else will tell you.
+    </p>
+    <dl class="money">
+      <div><dt>Fare saved</dt><dd>€178</dd></div>
+      <div><dt>Day in Dubai</dt><dd>€38</dd></div>
+      <div><dt>Net</dt><dd>+€140</dd></div>
+    </dl>
+  </section>
+
+  <section class="ask prose">
+    <h2>Want the plan for yours?</h2>
+    <p>
+      Paste your booking. Get the usable window, a plan that fits inside it, what it
+      costs, and the time you have to be back — for one long layover, on one ticket.
+    </p>
+    <button class="cta" id="cta" type="button">Generate my plan — €7</button>
+    <div class="after-click" id="after" hidden>
+      <p>
+        <strong>Nothing happened, and you were not charged.</strong> This does not exist
+        yet. The page is here to find out whether it is worth building, and you clicking
+        that button is the answer I was looking for.
+      </p>
+      <form class="capture" id="capture">
+        <label for="email">Tell me when this is real</label>
+        <input id="email" name="email" type="email" required autocomplete="email"
+               placeholder="you@example.com">
+        <button type="submit">Tell me</button>
+      </form>
+      <p class="capture-note" id="capture-note">
+        One message when it works. No list, no forwarding, nothing else.
+      </p>
+    </div>
+  </section>
+
+  <footer>
+    <p>
+      <strong>What is real here:</strong> the time arithmetic. The 375 minutes, the
+      09:30 and the 15:45 are computed output from the scoring engine, using Dubai's
+      actual transfer and immigration times.
+    </p>
+    <p>
+      <strong>What is not:</strong> the fares. €512, €690 and the €38 day are
+      placeholders in a test fixture, not quotes. Entry requirements are always the
+      traveller's responsibility and must be confirmed with the carrier.
+    </p>
+  </footer>
+
+</div>
+
+<script>
+  (function () {
+    // Set this to your form endpoint (Formspree, Basin, Tally, your own /signup)
+    // before hosting. Left empty, the form says so instead of pretending to send.
+    var FORM_ENDPOINT = "";
+
+    var cta = document.getElementById("cta");
+    var after = document.getElementById("after");
+    var form = document.getElementById("capture");
+    var note = document.getElementById("capture-note");
+
+    cta.addEventListener("click", function () {
+      after.hidden = false;
+      cta.disabled = true;
+      cta.style.opacity = "0.55";
+      cta.style.cursor = "default";
+      document.getElementById("email").focus({ preventScroll: true });
+      after.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    });
+
+    form.addEventListener("submit", function (event) {
+      event.preventDefault();
+      var email = document.getElementById("email").value.trim();
+      if (!email) return;
+
+      if (!FORM_ENDPOINT) {
+        note.textContent =
+          "This is the preview — no endpoint is configured, so nothing was sent " +
+          "and your address was not stored anywhere.";
+        return;
+      }
+
+      note.textContent = "Sending…";
+      fetch(FORM_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ email: email, source: "layover-landing" })
+      })
+        .then(function (response) {
+          if (!response.ok) throw new Error(String(response.status));
+          form.hidden = true;
+          note.textContent = "Got it. One message when it works.";
+        })
+        .catch(function () {
+          note.textContent =
+            "That did not send. Try again in a moment, or the endpoint is misconfigured.";
+        });
+    });
+  })();
+</script>
+</body>
+</html>
