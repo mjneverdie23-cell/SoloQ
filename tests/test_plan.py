@@ -180,7 +180,7 @@ def test_a_half_day_buys_no_bed(dxb_plan):
 
 
 def test_an_overnight_band_buys_a_bed(tmp_path):
-    """RIX 23h: OVERNIGHT, three meals and a bed — 3 + 0 + 24 + 25 = 52."""
+    """RIX 23h: OVERNIGHT, three meals and a bed — 3 + 24 + 24 + 25 = 76."""
     from app.models import Hub
 
     conn = connect(tmp_path / "layover.db")
@@ -197,10 +197,7 @@ def test_an_overnight_band_buys_a_bed(tmp_path):
     assert plan.band == "OVERNIGHT"
     assert plan.stay_cost_eur == 25.00
     assert plan.meals == 3
-    assert plan.total_cost_eur == 52.00
-    # RIX has no curated rows yet, so admissions are structurally zero and this
-    # figure moves once the remaining five hubs land.
-    assert rows == [] and plan.activities_cost_eur == 0
+    assert plan.total_cost_eur == 76.00
 
 
 def test_a_night_arrival_also_buys_a_bed(activities, dxb_hub):
@@ -469,3 +466,77 @@ def test_waw_excludes_the_evening_chopin_recital(waw, waw_plan):
     assert is_open_during(recital, *WAW_WINDOW, WARSAW) is False
     assert recital not in waw_plan.items
     assert recital.interest_density > min(a.interest_density for a in waw_plan.items)
+
+
+RIGA = ZoneInfo("Europe/Riga")
+RIX_WINDOW = window_of("rix_23h_overnight")
+
+
+@pytest.fixture
+def rix(tmp_path):
+    return hub_and_rows(tmp_path, "RIX")
+
+
+@pytest.fixture
+def rix_plan(rix):
+    return fill(*rix, *RIX_WINDOW, RIGA)
+
+
+def test_eight_rix_activities_load(rix):
+    rows, _ = rix
+    assert len(rows) == 8
+    assert all(a.hub_iata == "RIX" and a.verified_on is None for a in rows)
+
+
+def test_rix_plan_over_the_overnight_window(rix_plan):
+    """13:07 to 07:50 next day, 1123 usable: seven stops and Jurmala still fit.
+
+    Riga is small enough that an 898-minute budget runs out of city before it
+    runs out of minutes — 609 allocated, 514 slack, well past the 20% floor.
+    """
+    assert [a.name for a in rix_plan.items] == [
+        "St Peter's Church tower",
+        "House of the Blackheads",
+        "Art Nouveau district, Alberta iela",
+        "Riga Central Market",
+        "Vecriga old town walk",
+        "Museum of the Occupation of Latvia",
+        "Jurmala beach by train",
+    ]
+    assert rix_plan.usable_minutes == 1123
+    assert rix_plan.allocated_minutes == 609
+    assert rix_plan.slack_minutes == 514
+    assert rix_plan.activities_cost_eur == 24.00
+    assert rix_plan.total_cost_eur == 76.00      # 3.00 bus + 24.00 + 24.00 + 25.00 bed
+
+
+def test_rix_excludes_the_11am_walking_tour(rix, rix_plan):
+    """The excluded row, and the only one of the six not excluded by an evening
+    opening: a tour that leaves at 11:00 daily.
+
+    The window opens at 13:07, two hours after that day's departure, and closes
+    at 07:50 the next morning, three hours before the following one. A fixed
+    daily departure is exactly the recurring clock rule opens_local models, and
+    it is the one shape a long overnight window can still miss.
+    """
+    rows, _ = rix
+    tour = next(a for a in rows if "walking tour" in a.name)
+    assert (tour.opens_local, tour.closes_local) == (time(11, 0), time(13, 0))
+    assert is_open_during(tour, *RIX_WINDOW, RIGA) is False
+    assert tour not in rix_plan.items
+    # Nothing to do with the budget: 514 minutes of slack were left unspent.
+    assert rix_plan.slack_minutes > tour.time_cost_minutes
+
+
+def test_every_curated_row_is_unverified_and_in_range(tmp_path):
+    """All 48 rows of §9 now exist. §7 applies to them as it does to the hubs."""
+    conn = connect(tmp_path / "layover.db")
+    load_seed(conn)
+    rows = [load_activities(conn, iata) for iata in ("IST", "DOH", "DXB", "AUH", "WAW", "RIX")]
+    conn.close()
+    assert [len(hub_rows) for hub_rows in rows] == [8] * 6
+    for a in [a for hub_rows in rows for a in hub_rows]:
+        assert a.verified_on is None, a.name
+        assert 0.0 <= a.interest <= 1.0, a.name
+        assert a.minutes_needed > 0 and a.cost_eur >= 0, a.name
+        assert a.opens_local < a.closes_local, a.name
