@@ -221,3 +221,84 @@ def test_a_full_day_does_not_buy_a_bed(activities, dxb_hub):
     plan = fill(activities, dxb_hub, start, start + timedelta(minutes=700), DUBAI)
     assert plan.band == "FULL_DAY"
     assert plan.stay_cost_eur == 0.0
+
+
+# --- the other five hubs' curated rows (§9) ---------------------------------
+
+ITINERARIES = Path(__file__).resolve().parent.parent / "fixtures" / "itineraries"
+
+
+def hub_and_rows(tmp_path, iata):
+    """Same (rows, hub) shape as `seeded`, for the hubs that landed after DXB."""
+    conn = connect(tmp_path / "layover.db")
+    load_seed(conn)
+    hub = Hub(**dict(conn.execute("SELECT * FROM hub WHERE iata = ?", (iata,)).fetchone()))
+    rows = load_activities(conn, iata)
+    conn.close()
+    return rows, hub
+
+
+def window_of(fixture_id):
+    """The city window §5 computed for a fixture, not one invented here."""
+    expected = json.loads((ITINERARIES / f"{fixture_id}.json").read_text())["expected"]
+    return (
+        datetime.fromisoformat(expected["window_start_local"]),
+        datetime.fromisoformat(expected["window_end_local"]),
+    )
+
+
+ISTANBUL = ZoneInfo("Europe/Istanbul")
+IST_WINDOW = window_of("ist_negative_saving")
+
+
+@pytest.fixture
+def ist(tmp_path):
+    return hub_and_rows(tmp_path, "IST")
+
+
+@pytest.fixture
+def ist_plan(ist):
+    return fill(*ist, *IST_WINDOW, ISTANBUL)
+
+
+def test_eight_ist_activities_load(ist):
+    rows, _ = ist
+    assert len(rows) == 8
+    assert all(a.hub_iata == "IST" and a.verified_on is None for a in rows)
+
+
+def test_ist_plan_over_the_negative_saving_window(ist_plan):
+    """09:55–15:15, 320 usable. IST's 60-minute transfer is already spent.
+
+    Hand-derived: 50 + 70 + 75 = 195 of a 256-minute budget, and the €25
+    cistern is the only admission that fits.
+    """
+    assert [a.name for a in ist_plan.items] == [
+        "Istiklal Caddesi walk, Taksim",
+        "Blue Mosque, Sultanahmet",
+        "Basilica Cistern",
+    ]
+    assert ist_plan.usable_minutes == 320
+    assert ist_plan.allocated_minutes == 195
+    assert ist_plan.slack_minutes == 125
+    assert ist_plan.activities_cost_eur == 25.00
+    assert ist_plan.total_cost_eur == 35.60      # 3.60 metro + 25.00 + 7.00 meal
+
+
+def test_ist_excludes_the_sunset_ferry(ist, ist_plan):
+    """The excluded row: the ferry sails at 17:30 and the window shuts at 15:15.
+
+    Closed-not-chosen, so it proves the fill filters rather than merely runs.
+    """
+    rows, _ = ist
+    ferry = next(a for a in rows if "sunset ferry" in a.name)
+    assert ferry.opens_local == time(17, 30)
+    assert is_open_during(ferry, *IST_WINDOW, ISTANBUL) is False
+    assert ferry not in ist_plan.items
+
+
+def test_ist_night_window_reaches_nothing(ist):
+    """ist_night_2200_1000's 23:55–05:15: every curated row is shut."""
+    plan = fill(*ist, *window_of("ist_night_2200_1000"), ISTANBUL)
+    assert plan.items == []
+    assert plan.band == "NO_EXIT"
