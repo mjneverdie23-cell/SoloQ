@@ -415,3 +415,57 @@ def test_auh_excludes_the_sunset_dhow(auh, auh_plan):
     assert is_open_during(dhow, *AUH_WINDOW, DUBAI) is False
     assert dhow not in auh_plan.items
     assert dhow.interest_density > min(a.interest_density for a in auh_plan.items)
+
+
+WARSAW = ZoneInfo("Europe/Warsaw")
+WAW_WINDOW = window_of("waw_inbound_bkk_osl")
+
+
+@pytest.fixture
+def waw(tmp_path):
+    return hub_and_rows(tmp_path, "WAW")
+
+
+@pytest.fixture
+def waw_plan(waw):
+    return fill(*waw, *WAW_WINDOW, WARSAW)
+
+
+def test_eight_waw_activities_load(waw):
+    rows, _ = waw
+    assert len(rows) == 8
+    assert all(a.hub_iata == "WAW" and a.verified_on is None for a in rows)
+
+
+def test_waw_plan_over_the_inbound_window(waw_plan):
+    """09:10–16:50, 460 usable: the longest half day of the six hubs.
+
+    47 + 70 + 57 + 102 = 276 of a 368-minute budget, and the two big museums
+    are exactly what 92 remaining minutes cannot buy.
+    """
+    assert [a.name for a in waw_plan.items] == [
+        "Palace of Culture viewing terrace",
+        "Old Town Market Square",
+        "Vistula boulevards walk",
+        "Royal Castle",
+    ]
+    assert waw_plan.usable_minutes == 460
+    assert waw_plan.allocated_minutes == 276
+    assert waw_plan.slack_minutes == 184
+    assert waw_plan.activities_cost_eur == 14.00
+    assert waw_plan.total_cost_eur == 23.20      # 2.20 train + 14.00 + 7.00 meal
+
+
+def test_waw_excludes_the_evening_chopin_recital(waw, waw_plan):
+    """The excluded row: the recital starts at 18:30, an hour and a half after
+    the traveller has to be back at Chopin airport.
+
+    It out-ranks the Royal Castle, which was taken with room to spare, so the
+    opening-hours filter is the only thing keeping it out.
+    """
+    rows, _ = waw
+    recital = next(a for a in rows if "Chopin recital" in a.name)
+    assert recital.opens_local == time(18, 30)
+    assert is_open_during(recital, *WAW_WINDOW, WARSAW) is False
+    assert recital not in waw_plan.items
+    assert recital.interest_density > min(a.interest_density for a in waw_plan.items)
