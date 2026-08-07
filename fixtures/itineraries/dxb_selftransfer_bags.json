@@ -3,6 +3,7 @@
   "note": "Self-transfer at a multi-terminal hub: bag reclaim and terminal change both apply (\u00a75.7).",
   "price_eur": 418.0,
   "baseline_price_eur": 690.0,
+  "baseline_duration_minutes": 965,
   "layover_plan_cost_eur": 45.0,
   "is_single_ticket": false,
   "outbound": [

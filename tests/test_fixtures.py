@@ -9,6 +9,7 @@ from datetime import date, datetime
 
 import pytest
 
+from app.comparison import comparison_of
 from app.db import connect
 from app.fares import FixtureSource, fare_source, is_demo_mode, itinerary_of
 from app.geo import load_entry_rule, load_schengen_airports
@@ -144,3 +145,58 @@ def test_search_returns_parsed_itineraries_not_raw_json():
     found = FixtureSource().search("OSL", "BKK", depart)
     assert found and all(hasattr(i, "is_single_ticket") for i in found)
     assert all(s.departure_local.tzinfo is not None for i in found for s in i.outbound)
+
+
+# --- step 7: the comparison -------------------------------------------------
+
+
+def comparison_for(fixture):
+    return comparison_of(
+        itinerary_of(fixture),
+        baseline_price_eur=fixture["baseline_price_eur"],
+        baseline_duration_minutes=fixture["baseline_duration_minutes"],
+        layover_plan_cost_eur=fixture["layover_plan_cost_eur"],
+    )
+
+
+def test_negative_saving(reference):
+    """SPEC.md §10 step 7 and the CLAUDE.md fixture.
+
+    ist_negative_saving saves €20 of fare against a €55 plan. The itinerary is
+    honestly worse and the number has to say so.
+    """
+    fixture = next(f for f in FIXTURES if f["id"] == "ist_negative_saving")
+    comparison = comparison_for(fixture)
+    assert comparison.fare_saving_eur == 20.0
+    assert comparison.net_saving_eur == -35.0
+    assert comparison.is_worse_than_flying_direct is True
+    assert comparison.euros_per_extra_hour < 0
+
+
+@pytest.mark.parametrize("fixture", FIXTURES, ids=FIXTURE_IDS)
+def test_comparison_arithmetic_holds(fixture):
+    comparison = comparison_for(fixture)
+    assert comparison.fare_saving_eur == (
+        fixture["baseline_price_eur"] - fixture["price_eur"]
+    )
+    assert comparison.net_saving_eur == (
+        comparison.fare_saving_eur - fixture["layover_plan_cost_eur"]
+    )
+    assert comparison.is_worse_than_flying_direct is (comparison.net_saving_eur < 0)
+
+
+@pytest.mark.parametrize("fixture", FIXTURES, ids=FIXTURE_IDS)
+def test_the_long_way_round_is_always_longer(fixture):
+    """Every fixture is a cheap slow routing, so extra_hours is positive."""
+    comparison = comparison_for(fixture)
+    assert comparison.extra_hours > 0
+    assert comparison.euros_per_extra_hour is not None
+
+
+def test_extra_hours_is_none_per_hour_when_not_slower():
+    """The rate is meaningless when the cheap routing is not actually slower."""
+    from app.comparison import Comparison
+
+    same = Comparison(400.0, 500.0, 20.0, 900, 900)
+    assert same.extra_hours == 0
+    assert same.euros_per_extra_hour is None

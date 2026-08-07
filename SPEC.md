@@ -131,14 +131,21 @@ class Layover:
 class Comparison:
     itinerary_price_eur: float
     baseline_price_eur: float      # cheapest fast itinerary, same OD + dates
-    fare_saving_eur: float
     layover_plan_cost_eur: float   # transfers + activities + stay
-    net_saving_eur: float          # fare_saving - plan_cost
-    extra_hours: float
+    itinerary_duration_minutes: int
+    baseline_duration_minutes: int
+    fare_saving_eur: float         # @property, baseline - itinerary
+    net_saving_eur: float          # @property, fare_saving - plan_cost
+    extra_hours: float             # @property, duration difference / 60
 ```
 
 `net_saving_eur` is the number the whole product exists to display. If it's
 negative the itinerary is honestly worse and we say so.
+
+All three headline figures are derived from the five stored ones, so they are
+properties (hard rule 7). `extra_hours` needs `baseline_duration_minutes`,
+which the fixtures carry alongside `baseline_price_eur` as a hand-set
+placeholder; the real one comes from Amadeus at step 9.
 
 A hub is an airport with extra operational data. `city`, `country_iso2` and
 `is_schengen` are airport facts and live only on `Airport` — duplicating them on
@@ -555,6 +562,10 @@ are testable; generated ones are not.
 
 10. Nightly batch writing to SQLite → verify: one full run completes under the
     call budget and populates results.
+
+11. Itinerary import (§13) → verify: the bgo_alg_out_of_scope fixture parses,
+    yields user_filtered_stops [1, 2], carries no ucs, and lands in the
+    no_hub_data state rather than crashing or scoring an unknown hub.
 ```
 
 Do not proceed to step N+1 until step N's verification passes.
@@ -580,6 +591,8 @@ Building any of these is a spec violation, not initiative:
   `flight-offers` response.
 - Randomly generated fixtures, a fixture-generation script, or an admin UI for
   editing them. Eight hand-written JSON files, committed.
+- Any HTTP fetch of a third-party travel page, a headless browser, a PNR lookup
+  against a GDS, or airline account integration. See §13.2.
 
 ---
 
@@ -592,3 +605,110 @@ Building any of these is a spec violation, not initiative:
    latter, that's an assumption to surface, not hide.
 3. What is the actual willingness to pay? Before step 8, put a landing page up
    with a fake "generate my plan — €7" button and count clicks.
+
+---
+
+## 13. Itinerary import — step 11
+
+How a traveller gets their trip into the tool. Three input modes, in descending
+order of fidelity:
+
+| Mode | Input | Fidelity |
+|---|---|---|
+| A | Flight numbers + date (`EK146 2026-09-15`) | Exact |
+| B | Pasted booking confirmation text | Exact if parseable |
+| C | Metasearch URL | OD + dates only |
+
+### 13.1 Mode C is a search query, not an itinerary
+
+A metasearch URL encodes a *search*, not a booking. The specific flight the user
+clicked lives in a session on the provider's server and is not in the link. Any
+UI that implies otherwise is lying.
+
+So: parse the URL for origin, destination and dates, run our own
+`FareSource.search()` on those parameters, and let the user pick from our
+results. The copy is **"We found these options for your route"** — never "here's
+your trip."
+
+### 13.2 Hard constraints
+
+- **No HTTP request to momondo, kayak, cheapflights, Skyscanner, Google Flights
+  or any other metasearch. Ever.** URL string parsing only. Fetching those pages
+  is scraping — hard rule 5 — and it is the conduct behind the Skiplagged
+  judgment. This holds for every provider format added later.
+- Parser failure falls back to the manual form (Mode A). **Never to a guess.**
+- No headless browser, no PNR lookup against a GDS, no airline account
+  integration. See §11.
+
+### 13.3 URL shapes
+
+Validated against a real link:
+
+```
+https://www.momondo.no/flight-search/BGO-ALG/2026-11-02/2026-11-06?ucs=mol85q&sort=bestflight_a&fs=stops%3D1%2C2#dialog
+```
+
+- **Host:** match `momondo\.[a-z.]{2,6}`. Real Norwegian links are `momondo.no`,
+  not `.com` — the earlier assumption was wrong. Do not enumerate ccTLDs;
+  validate on **path shape**, which is the reliable signal. `kayak` and
+  `cheapflights` share this format.
+- **Path:** `/flight-search/{ORIGIN}-{DEST}/{DEPART}/{RETURN}`. `{RETURN}` is
+  absent for a one-way. More than two dates, or more than one OD pair, is
+  multi-city: **detect and reject**, do not mis-parse into a round trip.
+- **Query:**
+  - `fs=stops=N,M` → `user_filtered_stops: list[int]`. URL-decode `%3D`→`=` and
+    `%2C`→`,` first. A user who has excluded nonstops has self-qualified as our
+    audience — surface that in the result copy.
+  - `sort` → ignore.
+  - `ucs` → a session correlator. **Stripped, never stored, never logged, never
+    echoed back.** `ParsedRoute` has no field for it, so it cannot be persisted
+    by forgetting to strip it — absence is structural, not a step in a process.
+
+```python
+@dataclass
+class ParsedRoute:
+    origin: str
+    destination: str
+    depart: date
+    return_date: date | None       # None => one-way
+    user_filtered_stops: list[int]
+    provider: str                  # "momondo" | "kayak" | "cheapflights" | ...
+```
+
+### 13.4 `no_hub_data` — the third result state
+
+The BGO→ALG link above parses cleanly and then has nowhere to go: BGO is not a
+v0 origin, ALG is not a v0 destination, and its plausible hubs (CDG, AMS, CPH,
+BCN) are not in the hub seed.
+
+That needs a state of its own, distinct from both **blocked** ("you cannot do
+this") and **stale** ("we do not trust our own numbers"):
+
+> **`no_hub_data`** — we parsed the route, and we do not have layover data for
+> its connecting airports.
+
+- Never crash.
+- Never silently drop the layover.
+- **Never score an unknown hub with default values.** Unknown is unknown, not
+  average. A hub with invented transfer and immigration times would produce a
+  confident number with nothing behind it, which is the failure §7 exists to
+  prevent, arriving through a different door.
+
+Copy: *"We can parse this route but we don't have layover data for its
+connecting airports yet."*
+
+This is the state a stranger hits first — v0 covers one origin and ten
+destinations, so almost every pasted link lands here. It deserves better
+handling than the paths a stranger reaches only after getting lucky.
+
+### 13.5 Demo behaviour
+
+With `FARE_SOURCE=fixture`, match a parsed route to the nearest fixture and
+render it, with the §8.3 banner still on. Paste-a-link is then demoable with
+zero network and zero quota, like everything else in steps 6–8.
+
+### 13.6 Fixture
+
+`bgo_alg_out_of_scope` carries the real URL above and asserts: the parse
+succeeds, `user_filtered_stops == [1, 2]`, `ucs` is absent from the parsed
+object, and the result state is `no_hub_data`.
