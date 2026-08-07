@@ -36,12 +36,8 @@
       "immigration_minutes": 30,
       "recheck_buffer_minutes": 180,
       "has_left_luggage": true,
-      "meal_cost_eur": 5.00,
-      "meal_cost_eur": 6.00,
-      "meal_cost_eur": 8.00,
-      "meal_cost_eur": 8.00,
       "meal_cost_eur": 7.00,
-      "meal_cost_eur": 8.00,
+      "overnight_cost_eur": 25.00,
       "activity_density": 0.9,
       "verified_on": null
     },
@@ -56,6 +52,7 @@
       "recheck_buffer_minutes": 180,
       "has_left_luggage": true,
       "meal_cost_eur": 6.00,
+      "overnight_cost_eur": 40.00,
       "activity_density": 0.6,
       "verified_on": null
     },
@@ -70,6 +67,7 @@
       "recheck_buffer_minutes": 180,
       "has_left_luggage": true,
       "meal_cost_eur": 8.00,
+      "overnight_cost_eur": 35.00,
       "activity_density": 0.8,
       "verified_on": null
     },
@@ -84,6 +82,7 @@
       "recheck_buffer_minutes": 180,
       "has_left_luggage": true,
       "meal_cost_eur": 8.00,
+      "overnight_cost_eur": 30.00,
       "activity_density": 0.5,
       "verified_on": null
     },
@@ -98,6 +97,7 @@
       "recheck_buffer_minutes": 120,
       "has_left_luggage": true,
       "meal_cost_eur": 7.00,
+      "overnight_cost_eur": 22.00,
       "activity_density": 0.7,
       "verified_on": null
     },
@@ -112,6 +112,7 @@
       "recheck_buffer_minutes": 120,
       "has_left_luggage": true,
       "meal_cost_eur": 8.00,
+      "overnight_cost_eur": 25.00,
       "activity_density": 0.6,
       "verified_on": null
     }

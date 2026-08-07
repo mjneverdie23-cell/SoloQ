@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
-from app.layover import daily_overlap_minutes
+from app.layover import band, daily_overlap_minutes, open_hours_minutes
 from app.models import Activity, Hub
 
 # §9: stop when 80% of the usable window is allocated. A plan with no slack is
@@ -21,6 +21,12 @@ ALLOCATION_CEILING = 0.80
 # is open, which is the error §5.4 exists to prevent.
 MEAL_WINDOWS = ((7, 9), (12, 14), (18, 21))
 MEAL_MINIMUM_OVERLAP = 45
+
+# §9. A bed is triggered by the band, not by window overlap, and the difference
+# is not arbitrary: mealtimes are recurring daily bands, so intersecting them is
+# the right test. A night's sleep is not a recurring band — §5.3 has already
+# decided whether this layover needs one, so that decision is the trigger.
+OVERNIGHT_BANDS = ("OVERNIGHT", "OVERNIGHT_NIGHT_ARRIVAL")
 
 
 def load_activities(conn: sqlite3.Connection, hub_iata: str) -> list[Activity]:
@@ -49,6 +55,7 @@ class Plan:
     items: list[Activity]
     transfer_cost_eur: float      # return trip to the centre
     meal_cost_eur: float          # one budget meal at this hub
+    overnight_cost_eur: float     # one budget bed at this hub
 
     @property
     def usable_minutes(self) -> int:
@@ -82,9 +89,31 @@ class Plan:
         return self.meals * self.meal_cost_eur
 
     @property
+    def band(self) -> str:
+        """§5.3/§5.4, off this plan's own window — one implementation, reused."""
+        return band(
+            self.usable_minutes,
+            open_hours_minutes(self.window_start, self.window_end, self.zone),
+        )
+
+    @property
+    def stay_cost_eur(self) -> float:
+        """A bed, when the band says one is required rather than optional.
+
+        FULL_DAY's day-use hotel is optional, and optional does not belong in a
+        mandatory cost.
+        """
+        return self.overnight_cost_eur if self.band in OVERNIGHT_BANDS else 0.0
+
+    @property
     def total_cost_eur(self) -> float:
-        """§4's layover_plan_cost_eur: transfers + activities + food."""
-        return self.transfer_cost_eur + self.activities_cost_eur + self.food_cost_eur
+        """§4's layover_plan_cost_eur: transfers + activities + food + stay."""
+        return (
+            self.transfer_cost_eur
+            + self.activities_cost_eur
+            + self.food_cost_eur
+            + self.stay_cost_eur
+        )
 
     @property
     def slack_minutes(self) -> int:
@@ -144,4 +173,5 @@ def _plan(hub: Hub, start: datetime, end: datetime, zone: ZoneInfo, items) -> Pl
         items=items,
         transfer_cost_eur=hub.transfer_cost_eur * 2,
         meal_cost_eur=hub.meal_cost_eur,
+        overnight_cost_eur=hub.overnight_cost_eur,
     )

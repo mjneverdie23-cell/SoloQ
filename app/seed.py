@@ -29,6 +29,7 @@ HUB_COLUMNS = (
     "has_left_luggage",
     "activity_density",
     "meal_cost_eur",
+    "overnight_cost_eur",
     "verified_on",
 )
 

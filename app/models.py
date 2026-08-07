@@ -34,6 +34,7 @@ class Hub:
     has_left_luggage: bool
     activity_density: float   # hand-scored opinion, not measurement
     meal_cost_eur: float      # one budget meal here — editorial, same discipline
+    overnight_cost_eur: float # one budget bed here — editorial, same discipline
     verified_on: date | None
 
 

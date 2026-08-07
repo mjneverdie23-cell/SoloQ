@@ -4,13 +4,12 @@
   "_placeholders": [
     "price_eur",
     "baseline_price_eur",
-    "baseline_duration_minutes",
-    "layover_plan_cost_eur"
+    "baseline_duration_minutes"
   ],
   "price_eur": 521.0,
   "baseline_price_eur": 700.0,
   "baseline_duration_minutes": 985,
-  "layover_plan_cost_eur": 95.0,
+  "layover_plan_cost_eur": 52.0,
   "is_single_ticket": true,
   "outbound": [
     {

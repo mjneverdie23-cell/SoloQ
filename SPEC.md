@@ -27,7 +27,7 @@ built yet — see §11.
 | Hubs | IST, DOH, DXB, AUH, WAW, RIX | Two Schengen, four non-Schengen — exercises both immigration paths. |
 | Destinations | 10 (see `hubs.seed.json`) | Call budget. |
 | Date window | 30 days forward, refreshed weekly | Call budget. |
-| Accommodation | Read-only recommendations, no booking | Booking integration is v1. |
+| Accommodation | Cost budgeted, not recommended | Recommending a bed is activity-shaped work; v1. |
 
 Everything outside this table is a v1+ decision. Do not widen scope to "make it
 general" — the narrow version is what proves the concept.
@@ -78,6 +78,7 @@ class Hub:                         # keyed on iata, FK to airport
     has_left_luggage: bool
     activity_density: float        # 0.0-1.0, hand-scored editorial judgement
     meal_cost_eur: float           # one budget meal here — editorial, see §9
+    overnight_cost_eur: float      # one budget bed here — editorial, see §9
     verified_on: date | None       # transfer/buffer times go stale — see §7
 
 @dataclass
@@ -116,10 +117,12 @@ class Plan:
     meal_cost_eur: float           # one budget meal at this hub
     usable_minutes: int            # @property, off the window
     allocated_minutes: int         # @property, activity time + transfers
+    band: str                      # @property, §5.3/§5.4 off this window
     meals: int                     # @property, MEAL_WINDOWS the window overlaps
     activities_cost_eur: float     # @property
     food_cost_eur: float           # @property, meals * meal_cost_eur
-    total_cost_eur: float          # @property, transfers + activities + food
+    stay_cost_eur: float           # @property, a bed when the band requires one
+    total_cost_eur: float          # @property, transfers + activities + food + stay
     slack_minutes: int             # @property, usable - allocated
 
 # --- Fare data (fetched) ---
@@ -185,6 +188,13 @@ hard rule 6 violation: they are a recurring daily rule rather than an instant,
 resolved against a date in the hub's zone when the fill runs. `Plan`'s four
 figures are all derived from the window and the items, so they are properties
 (hard rule 7).
+
+A bed is triggered by the **band**, not by window overlap, and the difference
+from meals is deliberate. Mealtimes are recurring daily bands, so intersecting
+them is the right test. A night's sleep is not a recurring band — §5.3 has
+already decided whether this layover needs one, so that decision is the trigger.
+`FULL_DAY`'s day-use hotel stays optional and stays at zero: optional does not
+belong in a mandatory cost.
 
 The meal is counted in full even though the traveller would have eaten anyway,
 and airside food costs strictly more than a Deira shawarma. That makes the
@@ -308,7 +318,7 @@ dataset — surface it prominently.
 | `NO_EXIT` | < 180 | Stay airside. Recommend lounge / rest zone. |
 | `QUICK` | 180–359 | One anchor activity, near-airport or one metro line. |
 | `HALF_DAY` | 360–659 | 2–3 activities + a meal. |
-| `FULL_DAY` | 660–1079 | Full itinerary + optional day-use hotel. |
+| `FULL_DAY` | 660–1079 | Full itinerary. A day-use hotel is optional and is not costed. |
 | `OVERNIGHT` | ≥ 1080 | Accommodation required; plan around sleep. |
 
 §5.4 can override any of these with a sixth value, `OVERNIGHT_NIGHT_ARRIVAL`.
@@ -671,6 +681,13 @@ Building any of these is a spec violation, not initiative:
 ---
 
 ## 12. Open questions to resolve before step 10
+
+Every cost inside `net_saving_eur` is now declared: transfers, admissions, food
+and a bed. What remains fake is the fares and the baseline durations, and both
+are replaced from Amadeus at step 10 — so the move from fixture mode to live
+data is a single step against a single source, not a sweep through scattered
+stand-ins. `_placeholders` on each fixture names exactly what is left.
+
 
 1. Does Amadeus's terms of service permit displaying fares alongside third-party
    activity recommendations? Read them; this affects v1 monetisation.

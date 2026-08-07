@@ -160,3 +160,39 @@ def test_missing_entry_rule_says_which_hub(conn):
     conn.execute("DELETE FROM entry_rule WHERE country_iso2 = 'AE'")
     with pytest.raises(LookupError, match="no NORDIC entry rule for hub DXB"):
         load_entry_rule(conn, "DXB")
+
+
+def test_each_hub_carries_its_own_cost_figures(conn):
+    """Per-hub values, pinned individually.
+
+    A regex insert once stacked all six meal costs into IST's row. JSON keeps
+    the last duplicate, so IST silently read 8.00 instead of its own figure and
+    every other hub was still correct — a wrong value, not a missing one, which
+    the non-null sweep cannot see. These assertions can.
+    """
+    costs = {
+        h["iata"]: (h["meal_cost_eur"], h["overnight_cost_eur"])
+        for h in rows(conn, "hub")
+    }
+    assert costs == {
+        "IST": (7.00, 25.00),
+        "DOH": (6.00, 40.00),
+        "DXB": (8.00, 35.00),
+        "AUH": (8.00, 30.00),
+        "WAW": (7.00, 22.00),
+        "RIX": (8.00, 25.00),
+    }
+
+
+def test_seed_json_has_no_duplicate_keys():
+    """json.loads silently keeps the last duplicate, so parse strictly instead."""
+    import json
+    from pathlib import Path
+
+    def reject_duplicates(pairs):
+        seen = [k for k, _ in pairs]
+        assert len(seen) == len(set(seen)), f"duplicate keys: {seen}"
+        return dict(pairs)
+
+    path = Path(__file__).resolve().parent.parent / "hubs.seed.json"
+    json.loads(path.read_text(), object_pairs_hook=reject_duplicates)

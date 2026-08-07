@@ -160,8 +160,64 @@ def test_a_brush_past_a_mealtime_does_not_count(activities, dxb_hub):
 
 def test_plan_figures_are_derived_not_stored(activities, dxb_hub):
     """Hard rule 7 — every figure on Plan comes off the window and the items."""
-    plan = Plan("DXB", WINDOW_START, WINDOW_END, DUBAI, activities[:2], 4.0, 8.0)
+    plan = Plan("DXB", WINDOW_START, WINDOW_END, DUBAI, activities[:2], 4.0, 8.0, 35.0)
     assert plan.allocated_minutes == sum(a.time_cost_minutes for a in activities[:2])
     assert plan.activities_cost_eur == sum(a.cost_eur for a in activities[:2])
     assert plan.slack_minutes == plan.usable_minutes - plan.allocated_minutes
-    assert plan.total_cost_eur == 4.0 + plan.activities_cost_eur + plan.food_cost_eur
+    assert plan.total_cost_eur == (
+        4.0 + plan.activities_cost_eur + plan.food_cost_eur + plan.stay_cost_eur
+    )
+
+
+# --- §9 a bed, when the band requires one ------------------------------------
+
+
+def test_a_half_day_buys_no_bed(dxb_plan):
+    """HALF_DAY needs nowhere to sleep, so the worked example is unchanged."""
+    assert dxb_plan.band == "HALF_DAY"
+    assert dxb_plan.stay_cost_eur == 0.0
+    assert dxb_plan.total_cost_eur == 13.25
+
+
+def test_an_overnight_band_buys_a_bed(tmp_path):
+    """RIX 23h: OVERNIGHT, three meals and a bed — 3 + 0 + 24 + 25 = 52."""
+    from app.models import Hub
+
+    conn = connect(tmp_path / "layover.db")
+    load_seed(conn)
+    hub = Hub(**dict(conn.execute("SELECT * FROM hub WHERE iata = 'RIX'").fetchone()))
+    rows = load_activities(conn, "RIX")
+    conn.close()
+
+    riga = ZoneInfo("Europe/Riga")
+    start = datetime(2026, 9, 1, 13, 7, tzinfo=riga)
+    end = datetime(2026, 9, 2, 7, 50, tzinfo=riga)
+    plan = fill(rows, hub, start, end, riga)
+
+    assert plan.band == "OVERNIGHT"
+    assert plan.stay_cost_eur == 25.00
+    assert plan.meals == 3
+    assert plan.total_cost_eur == 52.00
+    # RIX has no curated rows yet, so admissions are structurally zero and this
+    # figure moves once the remaining five hubs land.
+    assert rows == [] and plan.activities_cost_eur == 0
+
+
+def test_a_night_arrival_also_buys_a_bed(activities, dxb_hub):
+    """OVERNIGHT_NIGHT_ARRIVAL is a bed with nothing open — still a bed."""
+    start = datetime(2026, 9, 1, 21, 7, tzinfo=DUBAI)
+    plan = fill(activities, dxb_hub, start, start + timedelta(minutes=523), DUBAI)
+    assert plan.band == "OVERNIGHT_NIGHT_ARRIVAL"
+    assert plan.stay_cost_eur == 35.00
+
+
+def test_a_full_day_does_not_buy_a_bed(activities, dxb_hub):
+    """§5.3's day-use hotel is optional, and optional is not a mandatory cost.
+
+    Without this, widening OVERNIGHT_BANDS to include FULL_DAY breaks nothing —
+    no other test or fixture reaches that band.
+    """
+    start = datetime(2026, 9, 1, 8, 0, tzinfo=DUBAI)
+    plan = fill(activities, dxb_hub, start, start + timedelta(minutes=700), DUBAI)
+    assert plan.band == "FULL_DAY"
+    assert plan.stay_cost_eur == 0.0
