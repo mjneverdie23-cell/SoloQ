@@ -29,4 +29,6 @@ def load_entry_rule(conn: sqlite3.Connection, hub_iata: str) -> EntryRule:
         """,
         (hub_iata, PASSPORT_SCOPE),
     ).fetchone()
+    if row is None:
+        raise LookupError(f"no {PASSPORT_SCOPE} entry rule for hub {hub_iata}")
     return EntryRule(**dict(row))

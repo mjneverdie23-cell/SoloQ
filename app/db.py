@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS airport (
     city                    TEXT    NOT NULL,
     country_iso2            TEXT    NOT NULL,
     is_schengen             INTEGER NOT NULL,
+    tz_name                 TEXT    NOT NULL,
     verified_on             TEXT
 );
 

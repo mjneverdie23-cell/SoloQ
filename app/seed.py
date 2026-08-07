@@ -13,6 +13,7 @@ AIRPORT_COLUMNS = (
     "city",
     "country_iso2",
     "is_schengen",
+    "tz_name",
     "verified_on",
 )
 

@@ -81,7 +81,7 @@ def assess_case(seeded, lay, hub_iata, *, itin=None, today=TODAY, onward_to="BKK
         rules[hub_iata],
         itin or itinerary(),
         usable,
-        open_hours_minutes(start, end),
+        open_hours_minutes(start, end, ZoneInfo(airports[lay.hub_iata].tz_name)),
         today,
     )
 
@@ -133,7 +133,7 @@ def test_verified_data_becomes_recommendable(seeded):
         replace(rules["DXB"], verified_on=stamped),
         itinerary(),
         usable,
-        open_hours_minutes(start, end),
+        open_hours_minutes(start, end, ZoneInfo(airports[lay.hub_iata].tz_name)),
         TODAY,
     )
     assert result.stale_reasons == []
@@ -165,7 +165,7 @@ def test_visa_required_gate_ignores_duration(seeded):
         replace(rules["DXB"], entry_type="visa_required"),
         itinerary(),
         usable,
-        open_hours_minutes(start, end),
+        open_hours_minutes(start, end, ZoneInfo(airports[lay.hub_iata].tz_name)),
         TODAY,
     )
     assert usable > 600           # plenty of time, and it does not help
@@ -186,7 +186,7 @@ def test_self_transfer_without_left_luggage_gate(seeded):
         rules["DXB"],
         itinerary(single_ticket=False),
         usable,
-        open_hours_minutes(start, end),
+        open_hours_minutes(start, end, ZoneInfo(airports[lay.hub_iata].tz_name)),
         TODAY,
     )
     assert result.score == 0
@@ -211,7 +211,7 @@ def test_gates_are_collected_not_short_circuited(seeded):
         replace(rules["DXB"], entry_type="visa_required"),
         itinerary(),
         usable,
-        open_hours_minutes(start, end),
+        open_hours_minutes(start, end, ZoneInfo(airports[lay.hub_iata].tz_name)),
         TODAY,
     )
     assert len(result.blocked_reasons) == 3
@@ -231,7 +231,7 @@ def test_passport_validity_is_not_a_gate(seeded):
     assert rules["IST"].passport_validity_days == 150
     result = assess(
         lay, hubs["IST"], airports["IST"], rules["IST"], itinerary(),
-        usable, open_hours_minutes(start, end), TODAY,
+        usable, open_hours_minutes(start, end, ZoneInfo(airports[lay.hub_iata].tz_name)), TODAY,
     )
     assert result.blocked_reasons == []
     assert result.score > 0
@@ -289,7 +289,7 @@ def test_entry_ease_barely_moves_in_v0(seeded):
             assess(
                 lay, hubs["DXB"], airports["DXB"],
                 replace(rules["DXB"], entry_type=entry_type), itinerary(),
-                usable, open_hours_minutes(start, end), TODAY,
+                usable, open_hours_minutes(start, end, ZoneInfo(airports[lay.hub_iata].tz_name)), TODAY,
             ).score
         )
     assert max(scores) - min(scores) <= 2
@@ -332,14 +332,14 @@ def test_a_bed_is_still_a_plan(seeded):
     from app.layover import band
 
     lay = layover_at("RIX", "Europe/Riga", 20, 780)
-    hubs, _, _, schengen = seeded
+    hubs, airports, _, schengen = seeded
 
     onward = segment("RIX", "OSL")
     usable = usable_minutes(lay, hubs["RIX"], onward, schengen)
     start, end = city_window(lay, hubs["RIX"], onward, schengen)
     assert usable == 523
-    assert open_hours_minutes(start, end) == 0
-    assert band(usable, open_hours_minutes(start, end)) == "OVERNIGHT_NIGHT_ARRIVAL"
+    assert open_hours_minutes(start, end, ZoneInfo(airports[lay.hub_iata].tz_name)) == 0
+    assert band(usable, open_hours_minutes(start, end, ZoneInfo(airports[lay.hub_iata].tz_name))) == "OVERNIGHT_NIGHT_ARRIVAL"
     assert assess_case(seeded, lay, "RIX", onward_to="OSL").blocked_reasons == []
 
     leaving = segment("RIX", "BKK")

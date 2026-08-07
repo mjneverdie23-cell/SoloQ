@@ -62,6 +62,7 @@ class Airport:
     city: str
     country_iso2: str
     is_schengen: bool
+    tz_name: str                   # IANA zone, e.g. "Europe/Warsaw"
     verified_on: date | None       # membership changes — see §7
 
 @dataclass
@@ -303,9 +304,18 @@ on the datetime.
 A 22:00–10:00 layover is a hotel opportunity, not a sightseeing one. An
 08:00–20:00 layover is the reverse. Same duration, opposite plan.
 
-No timezone table. Segment datetimes are tz-aware and localised to the airport,
-so the local wall-clock hour is already available on the datetime itself — that
-is all the 08:00–21:00 overlap needs.
+The overlap takes the airport's IANA zone, from `Airport.tz_name`. It is not
+read off the segment datetimes: `datetime.fromisoformat` yields a fixed UTC
+offset, and a fixed offset cannot say what 08:00 local is on a day the offset
+changed. Reconstructing day boundaries from one was wrong across a DST
+transition by up to an hour, in the direction that overstates open hours and
+un-gates a layover with nothing open — 152 windows in a sweep of the 2026
+transitions crossed the 120-minute floor because of it.
+
+Still no timezone *table*: one column on the existing `airport` row, carrying
+the same `verified_on` discipline as everything else there. Hard rule 6 says
+datetimes are "localised to the airport they describe", and an offset is not a
+locale.
 
 ### 5.5 Score
 

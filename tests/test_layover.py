@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -11,10 +11,12 @@ from app.layover import (
     duration_band,
     is_entry_point,
     open_hours_minutes,
+    layovers_of,
     recheck_buffer,
     usable_minutes,
+    UnknownHub,
 )
-from app.models import Hub, Layover, Segment
+from app.models import Hub, Itinerary, Layover, Segment
 from app.seed import load_seed
 
 
@@ -24,9 +26,13 @@ def seeded(tmp_path):
     conn = connect(tmp_path / "layover.db")
     load_seed(conn)
     hubs = {row["iata"]: Hub(**dict(row)) for row in conn.execute("SELECT * FROM hub")}
+    zones = {
+        row["iata"]: ZoneInfo(row["tz_name"])
+        for row in conn.execute("SELECT iata, tz_name FROM airport")
+    }
     schengen = load_schengen_airports(conn)
     conn.close()
-    return hubs, schengen
+    return hubs, schengen, zones
 
 
 @pytest.fixture
@@ -37,6 +43,12 @@ def hubs(seeded):
 @pytest.fixture
 def schengen(seeded):
     return seeded[1]
+
+
+@pytest.fixture
+def zones(seeded):
+    """The seeded IANA zone per airport — what §5.4 needs, not a fixed offset."""
+    return seeded[2]
 
 
 def onward_to(destination: str) -> Segment:
@@ -84,7 +96,7 @@ def layover_at(
     )
 
 
-def test_dxb_12h_halfday(hubs, schengen):
+def test_dxb_12h_halfday(hubs, schengen, zones):
     """SPEC.md §5.3 worked example. 720 - 25 - 35 - 60 - 180 - 45 = 375."""
     lay = layover_at(
         "DXB", "Asia/Dubai", 8, 720, is_entry_point=True, requires_bag_reclaim=False
@@ -97,7 +109,7 @@ def test_dxb_12h_halfday(hubs, schengen):
     start, end = city_window(lay, hubs["DXB"], onward_to("BKK"), schengen)
     assert (start.hour, start.minute) == (9, 30)    # 08:00 + 25 + 35 + 30
     assert (end.hour, end.minute) == (15, 45)       # 20:00 - 180 - 30 - 45
-    assert band(usable, open_hours_minutes(start, end)) == "HALF_DAY"
+    assert band(usable, open_hours_minutes(start, end, zones[lay.hub_iata])) == "HALF_DAY"
 
 
 def test_schengen_entry_inbound(hubs, schengen):
@@ -122,7 +134,7 @@ def test_non_schengen_hubs_are_always_entry_points(hubs, schengen):
             assert is_entry_point(hubs[iata], arriving_from(origin), schengen) is True
 
 
-def test_waw_inbound_is_the_best_case_in_the_set(hubs, schengen):
+def test_waw_inbound_is_the_best_case_in_the_set(hubs, schengen, zones):
     """BKK -> WAW -> OSL: entry point, but the cheap buffer and no bag reclaim."""
     lay = layover_at(
         "WAW", "Europe/Warsaw", 8, 720, is_entry_point=True, requires_bag_reclaim=False
@@ -132,7 +144,7 @@ def test_waw_inbound_is_the_best_case_in_the_set(hubs, schengen):
     assert usable == 460
 
     start, end = city_window(lay, hubs["WAW"], onward_to("OSL"), schengen)
-    assert band(usable, open_hours_minutes(start, end)) == "HALF_DAY"
+    assert band(usable, open_hours_minutes(start, end, zones[lay.hub_iata])) == "HALF_DAY"
 
 
 def test_waw_inbound_keeps_the_shorter_buffer(hubs, schengen):
@@ -208,7 +220,7 @@ def test_band_boundaries(usable, expected):
     assert duration_band(usable) == expected
 
 
-def test_night_arrival(hubs, schengen):
+def test_night_arrival(hubs, schengen, zones):
     """ist_night_2200_1000 — a twelve-hour layover worth nothing.
 
     Arrive 22:00, depart 10:00. The city window lands entirely in the small
@@ -219,7 +231,7 @@ def test_night_arrival(hubs, schengen):
     )
     start, end = city_window(lay, hubs["IST"], onward_to("BKK"), schengen)
     usable = usable_minutes(lay, hubs["IST"], onward_to("BKK"), schengen)
-    open_hours = open_hours_minutes(start, end)
+    open_hours = open_hours_minutes(start, end, zones[lay.hub_iata])
 
     assert (start.hour, start.minute) == (23, 55)   # 22:00 + 25 + 30 + 60
     assert (end.hour, end.minute) == (5, 15)        # 10:00 - 180 - 60 - 45
@@ -229,7 +241,7 @@ def test_night_arrival(hubs, schengen):
     assert band(usable, open_hours) == "NO_EXIT"    # what §5.4 knows
 
 
-def test_long_night_layover_is_a_bed_not_a_gate(hubs, schengen):
+def test_long_night_layover_is_a_bed_not_a_gate(hubs, schengen, zones):
     """§5.4's other branch: nothing open, but long enough that a hotel is the plan.
 
     Arrive 20:00, depart 09:00. The window is 21:07–05:50, which clears the
@@ -240,7 +252,7 @@ def test_long_night_layover_is_a_bed_not_a_gate(hubs, schengen):
     )
     start, end = city_window(lay, hubs["RIX"], onward_to("OSL"), schengen)
     usable = usable_minutes(lay, hubs["RIX"], onward_to("OSL"), schengen)
-    open_hours = open_hours_minutes(start, end)
+    open_hours = open_hours_minutes(start, end, zones[lay.hub_iata])
 
     assert open_hours < 120
     assert usable >= 480
@@ -248,18 +260,20 @@ def test_long_night_layover_is_a_bed_not_a_gate(hubs, schengen):
 
 
 def test_open_hours_counts_only_the_08_to_21_overlap():
+    warsaw = ZoneInfo("Europe/Warsaw")
     """A window straddling the close: 18:00–23:00 local contributes three hours."""
     tz = ZoneInfo("Europe/Warsaw")
     start = datetime(2026, 9, 1, 18, 0, tzinfo=tz)
-    assert open_hours_minutes(start, start + timedelta(hours=5)) == 180
+    assert open_hours_minutes(start, start + timedelta(hours=5), warsaw) == 180
 
 
 def test_open_hours_spans_multiple_days():
+    warsaw = ZoneInfo("Europe/Warsaw")
     """A 30-hour window collects two separate open-hours blocks, not one."""
     tz = ZoneInfo("Europe/Warsaw")
     start = datetime(2026, 9, 1, 12, 0, tzinfo=tz)
     # 12:00-21:00 today (540) + 08:00-18:00 tomorrow (600).
-    assert open_hours_minutes(start, start + timedelta(hours=30)) == 540 + 600
+    assert open_hours_minutes(start, start + timedelta(hours=30), warsaw) == 540 + 600
 
 
 def _usable_by_deduction_list(lay, hub, onward, schengen):
@@ -302,3 +316,43 @@ def test_window_delta_equals_the_deduction_list(
     assert usable_minutes(lay, hubs[hub_iata], onward, schengen) == _usable_by_deduction_list(
         lay, hubs[hub_iata], onward, schengen
     )
+
+
+def test_open_hours_is_correct_across_a_dst_transition():
+    """A fixed UTC offset cannot say what 08:00 local is after the clocks move.
+
+    Reconstructing day boundaries from `start.tzinfo` was wrong by up to an
+    hour, in the direction that overstates open hours and un-gates a layover
+    with nothing actually open. Passing the IANA zone is what fixes it.
+    """
+    warsaw = ZoneInfo("Europe/Warsaw")
+    start = datetime(2026, 10, 24, 12, 0, tzinfo=warsaw)   # clocks go back on the 25th
+    end = start + timedelta(hours=30)
+    assert open_hours_minutes(start, end, warsaw) == 540 + 600
+
+    # The same instants as `fromisoformat` hands them over: fixed offsets, and
+    # the two disagree because the transition falls between them.
+    start_fixed = start.replace(tzinfo=timezone(start.utcoffset()))
+    end_local = end.astimezone(warsaw)
+    end_fixed = end_local.replace(tzinfo=timezone(end_local.utcoffset()))
+    assert start_fixed.utcoffset() != end_fixed.utcoffset()
+    assert open_hours_minutes(start_fixed, end_fixed, warsaw) == 540 + 600
+
+
+def test_unknown_hub_is_named_not_a_keyerror(hubs, schengen):
+    """§13.4: no_hub_data must never crash. This is the exception it catches."""
+    itin = Itinerary(
+        id="x", price_eur=1.0, is_single_ticket=True,
+        outbound=[
+            Segment("AF", "AF1", "OSL", "CDG",
+                    datetime(2026, 9, 1, 8, tzinfo=ZoneInfo("Europe/Oslo")),
+                    datetime(2026, 9, 1, 10, tzinfo=ZoneInfo("Europe/Paris")), True),
+            Segment("AF", "AF2", "CDG", "BKK",
+                    datetime(2026, 9, 1, 22, tzinfo=ZoneInfo("Europe/Paris")),
+                    datetime(2026, 9, 2, 14, tzinfo=ZoneInfo("Asia/Bangkok")), True),
+        ],
+        inbound=[],
+    )
+    with pytest.raises(UnknownHub) as excinfo:
+        layovers_of(itin.outbound, itin, hubs, schengen)
+    assert excinfo.value.iata == "CDG"

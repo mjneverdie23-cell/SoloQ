@@ -6,6 +6,7 @@ regression suite rather than a snapshot of whatever the code happened to do.
 """
 
 from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -47,7 +48,7 @@ def computed(fixture, reference):
     onward = itin.outbound[-1]
     start, end = city_window(lay, hub, onward, schengen)
     usable = usable_minutes(lay, hub, onward, schengen)
-    open_hours = open_hours_minutes(start, end)
+    open_hours = open_hours_minutes(start, end, ZoneInfo(airports[lay.hub_iata].tz_name))
     result = assess(
         lay, hub, airports[lay.hub_iata], rules[lay.hub_iata], itin,
         usable, open_hours, TODAY,
@@ -75,6 +76,9 @@ def test_fixture_carries_a_baseline_and_a_plan_cost(fixture):
     """Step 7's Comparison reads both; §9's activity rows are step 10."""
     assert fixture["baseline_price_eur"] > 0
     assert fixture["layover_plan_cost_eur"] >= 0
+    # extra_hours divides by this; a missing or zero value would surface as a
+    # nonsense euros_per_extra_hour rather than a failing test.
+    assert fixture["baseline_duration_minutes"] > 0
 
 
 def test_eight_fixtures_exist():

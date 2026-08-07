@@ -15,6 +15,7 @@ class Airport:
     city: str
     country_iso2: str
     is_schengen: bool
+    tz_name: str               # IANA zone; a fixed offset cannot do DST
     verified_on: date | None
 
 

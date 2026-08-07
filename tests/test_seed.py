@@ -143,3 +143,20 @@ def test_db_path_comes_from_the_environment(tmp_path, monkeypatch):
     load_seed(conn)
     conn.close()
     assert (tmp_path / "from-env.db").exists()
+
+
+def test_every_airport_has_a_real_iana_zone(conn):
+    """§5.4 needs a zone, not an offset. A fixed offset cannot do DST."""
+    from zoneinfo import ZoneInfo
+
+    for airport in rows(conn, "airport"):
+        assert "/" in airport["tz_name"], airport["iata"]
+        ZoneInfo(airport["tz_name"])   # raises if it is not a real zone
+
+
+def test_missing_entry_rule_says_which_hub(conn):
+    from app.geo import load_entry_rule
+
+    conn.execute("DELETE FROM entry_rule WHERE country_iso2 = 'AE'")
+    with pytest.raises(LookupError, match="no NORDIC entry rule for hub DXB"):
+        load_entry_rule(conn, "DXB")

@@ -1,6 +1,7 @@
 """Layover computation — SPEC.md §5.1, §5.3 and §5.4."""
 
 from datetime import datetime, time, timedelta
+from zoneinfo import ZoneInfo
 
 from app.models import Hub, Itinerary, Layover, Segment
 
@@ -79,16 +80,25 @@ def usable_minutes(
     return max(0, _floor_minutes(end - start))
 
 
-def open_hours_minutes(start: datetime, end: datetime) -> int:
+def open_hours_minutes(start: datetime, end: datetime, zone: ZoneInfo) -> int:
     """SPEC.md §5.4. Overlap of the city window with local 08:00–21:00.
 
     Open hours, not daylight: museums keep the same hours in a Riga December.
+
+    The zone is passed in, not read off the endpoints. `datetime.fromisoformat`
+    returns a fixed `timezone(timedelta(...))`, and a fixed offset cannot say
+    what 08:00 local is on a day the offset changed — so reconstructing day
+    boundaries from it is wrong across a DST transition, by up to an hour, in
+    the direction that un-gates a layover with nothing open. Only an IANA zone
+    answers the question, which is what hard rule 6's "localised to the airport
+    it describes" actually requires.
     """
     total = 0
-    day = start.date()
-    while day <= end.date():
-        opens = datetime.combine(day, time(CITY_OPEN_LOCAL), tzinfo=start.tzinfo)
-        closes = datetime.combine(day, time(CITY_CLOSE_LOCAL), tzinfo=start.tzinfo)
+    day = start.astimezone(zone).date()
+    last = end.astimezone(zone).date()
+    while day <= last:
+        opens = datetime.combine(day, time(CITY_OPEN_LOCAL), tzinfo=zone)
+        closes = datetime.combine(day, time(CITY_CLOSE_LOCAL), tzinfo=zone)
         total += max(0, _floor_minutes(min(end, closes) - max(start, opens)))
         day += timedelta(days=1)
     return total
@@ -124,6 +134,20 @@ def _floor_minutes(delta: timedelta) -> int:
     return int(delta.total_seconds() // 60)
 
 
+class UnknownHub(LookupError):
+    """A connection at an airport with no hub row.
+
+    Named rather than a bare KeyError because §13.4's no_hub_data state is
+    built by catching exactly this: we parsed the route and have no layover
+    data for its connecting airport. Unknown is unknown, not average — never
+    substitute defaults, and never drop the layover silently.
+    """
+
+    def __init__(self, iata: str):
+        super().__init__(f"no hub data for {iata}")
+        self.iata = iata
+
+
 def layovers_of(
     segments: list[Segment],
     itin: Itinerary,
@@ -134,6 +158,9 @@ def layovers_of(
     fields no fare response gives us, so they are applied mechanically rather
     than judged case by case."""
     self_transfer = not itin.is_single_ticket
+    for arriving in segments[:-1]:
+        if arriving.destination not in hubs:
+            raise UnknownHub(arriving.destination)
     return [
         Layover(
             hub_iata=arriving.destination,
