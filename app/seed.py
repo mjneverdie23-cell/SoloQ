@@ -67,8 +67,22 @@ def _insert(conn: sqlite3.Connection, table: str, columns: tuple[str, ...], rows
     conn.executemany(sql, [[row.get(column) for column in columns] for row in rows])
 
 
+def reject_duplicate_keys(pairs: list[tuple]) -> dict:
+    """`json.loads` keeps the last duplicate and says nothing about it.
+
+    A regex insert once wrote six meal costs into one hub row; the file parsed
+    cleanly and the hub silently took the last of them. Guarding the load path
+    rather than only the test means a corrupt seed cannot reach runtime.
+    """
+    keys = [key for key, _ in pairs]
+    duplicates = sorted({key for key in keys if keys.count(key) > 1})
+    if duplicates:
+        raise ValueError(f"duplicate keys in seed: {duplicates}")
+    return dict(pairs)
+
+
 def load_seed(conn: sqlite3.Connection, seed_path: Path = SEED_PATH) -> None:
-    seed = json.loads(seed_path.read_text())
+    seed = json.loads(seed_path.read_text(), object_pairs_hook=reject_duplicate_keys)
     # Airports first: hub.iata is a foreign key into them.
     _insert(conn, "airport", AIRPORT_COLUMNS, seed["airports"])
     _insert(conn, "hub", HUB_COLUMNS, seed["hubs"])

@@ -185,14 +185,23 @@ def test_each_hub_carries_its_own_cost_figures(conn):
 
 
 def test_seed_json_has_no_duplicate_keys():
-    """json.loads silently keeps the last duplicate, so parse strictly instead."""
+    """The real load path rejects them, so this exercises that hook."""
     import json
     from pathlib import Path
 
-    def reject_duplicates(pairs):
-        seen = [k for k, _ in pairs]
-        assert len(seen) == len(set(seen)), f"duplicate keys: {seen}"
-        return dict(pairs)
+    from app.seed import reject_duplicate_keys
 
     path = Path(__file__).resolve().parent.parent / "hubs.seed.json"
-    json.loads(path.read_text(), object_pairs_hook=reject_duplicates)
+    json.loads(path.read_text(), object_pairs_hook=reject_duplicate_keys)
+
+
+def test_a_duplicate_key_stops_the_load_not_just_the_test(tmp_path):
+    """A corrupt seed must not reach runtime — the case that shipped once."""
+    import json
+
+    corrupt = tmp_path / "corrupt.json"
+    corrupt.write_text('{"hubs": [{"iata": "DXB", "meal_cost_eur": 8.0, "meal_cost_eur": 5.0}]}')
+    conn = connect(tmp_path / "layover.db")
+    with pytest.raises(ValueError, match="duplicate keys in seed"):
+        load_seed(conn, corrupt)
+    conn.close()

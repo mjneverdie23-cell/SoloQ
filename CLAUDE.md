@@ -109,6 +109,18 @@ If a check fails, fix it before moving on. Don't accumulate broken steps.
    included meals that nothing counted. Either declare the field or delete the
    prose — a prose-only quantity is the bug.
 
+10. **Structural edits to a structured file go through a parser.** Load, mutate
+    the target object, dump. Never a regex over JSON, YAML or TOML — not once,
+    not "just this one field". A pattern has no idea which object it is inside,
+    so it escapes the section you meant and silently edits another. This has
+    happened three times: `country_iso2` stripped from the entry rules while
+    editing hubs, and `meal_cost_eur` stacked six-deep into IST's row from a
+    pattern that also matched the airports array. The second produced a *wrong
+    value rather than a missing one*, which the non-null sweep cannot see. The
+    duplicate-key hook in `app/seed.py` is the safety net; this rule is the fix.
+    If a parser round-trip would reformat the file, slice to the section first
+    and parse that — still no regex on the values.
+
 ---
 
 ## Test fixtures that must always pass
