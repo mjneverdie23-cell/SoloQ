@@ -362,3 +362,56 @@ def test_doh_fixture_window_is_inverted_and_plans_nothing(doh):
     plan = fill(*doh, *window_of("doh_150min"), QATAR)
     assert plan.usable_minutes == 0
     assert plan.items == []
+
+
+# AUH has no fixture at all, so this window is chosen rather than computed:
+# 09:00–16:00 local, 420 usable, the HALF_DAY a daytime Abu Dhabi stop lands in.
+AUH_WINDOW = (
+    datetime(2026, 9, 1, 9, 0, tzinfo=DUBAI),
+    datetime(2026, 9, 1, 16, 0, tzinfo=DUBAI),
+)
+
+
+@pytest.fixture
+def auh(tmp_path):
+    return hub_and_rows(tmp_path, "AUH")
+
+
+@pytest.fixture
+def auh_plan(auh):
+    return fill(*auh, *AUH_WINDOW, DUBAI)
+
+
+def test_eight_auh_activities_load(auh):
+    rows, _ = auh
+    assert len(rows) == 8
+    assert all(a.hub_iata == "AUH" and a.verified_on is None for a in rows)
+
+
+def test_auh_plan_over_a_representative_daytime_window(auh_plan):
+    """55 + 65 + 80 + 115 = 315 of a 336-minute budget. The mosque only just fits."""
+    assert [a.name for a in auh_plan.items] == [
+        "Corniche beach walk",
+        "Mina Zayed date and fish market",
+        "Qasr Al Hosn",
+        "Sheikh Zayed Grand Mosque",
+    ]
+    assert auh_plan.usable_minutes == 420
+    assert auh_plan.allocated_minutes == 315
+    assert auh_plan.slack_minutes == 105
+    assert auh_plan.activities_cost_eur == 8.00
+    assert auh_plan.total_cost_eur == 18.00      # 2.00 bus + 8.00 + 8.00 meal
+
+
+def test_auh_excludes_the_sunset_dhow(auh, auh_plan):
+    """The excluded row: it sails at 18:00 and the window shuts at 16:00.
+
+    It out-ranks three stops the fill took, so it would have been second on the
+    list had it been open. Only the opening-hours filter drops it.
+    """
+    rows, _ = auh
+    dhow = next(a for a in rows if "dhow cruise" in a.name)
+    assert dhow.opens_local == time(18, 0)
+    assert is_open_during(dhow, *AUH_WINDOW, DUBAI) is False
+    assert dhow not in auh_plan.items
+    assert dhow.interest_density > min(a.interest_density for a in auh_plan.items)
