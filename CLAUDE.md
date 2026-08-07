@@ -100,6 +100,15 @@ If a check fails, fix it before moving on. Don't accumulate broken steps.
    (`data-theme`) are dead in an exported file; delete whole rule blocks, never
    just an opening line, and check that braces still balance afterwards.
 
+9. **A quantity named in spec prose must have a declared field.** If `SPEC.md`
+   talks about a number, §4 declares it or something in §4 derives it. Otherwise
+   the algorithm reads a field nobody wrote and the gap surfaces at
+   implementation time, or worse, gets papered over with an invented value.
+   Three instances of one defect named it: the `terminal_change` penalty had no
+   input, §9's fill sorted by an `interest` nothing supplied, and plan cost
+   included meals that nothing counted. Either declare the field or delete the
+   prose — a prose-only quantity is the bug.
+
 ---
 
 ## Test fixtures that must always pass

@@ -93,12 +93,24 @@ def open_hours_minutes(start: datetime, end: datetime, zone: ZoneInfo) -> int:
     answers the question, which is what hard rule 6's "localised to the airport
     it describes" actually requires.
     """
+    return daily_overlap_minutes(start, end, zone, CITY_OPEN_LOCAL, CITY_CLOSE_LOCAL)
+
+
+def daily_overlap_minutes(
+    start: datetime, end: datetime, zone: ZoneInfo, from_hour: int, to_hour: int
+) -> int:
+    """Minutes the window spends inside a recurring local daily band.
+
+    §5.4's open hours are one band; §9's meal windows are three more. Same
+    machinery, and it gets the night case right for both: a 23:55–05:15 window
+    overlaps neither the city's opening hours nor any mealtime.
+    """
     total = 0
     day = start.astimezone(zone).date()
     last = end.astimezone(zone).date()
     while day <= last:
-        opens = datetime.combine(day, time(CITY_OPEN_LOCAL), tzinfo=zone)
-        closes = datetime.combine(day, time(CITY_CLOSE_LOCAL), tzinfo=zone)
+        opens = datetime.combine(day, time(from_hour), tzinfo=zone)
+        closes = datetime.combine(day, time(to_hour), tzinfo=zone)
         total += max(0, _floor_minutes(min(end, closes) - max(start, opens)))
         day += timedelta(days=1)
     return total

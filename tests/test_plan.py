@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from app.db import connect
+from app.models import Hub
 from app.plan import ALLOCATION_CEILING, Plan, fill, is_open_during, load_activities
 from app.seed import load_seed
 
@@ -21,17 +22,29 @@ WINDOW_END = datetime.fromisoformat(FIXTURE["expected"]["window_end_local"])
 
 
 @pytest.fixture
-def activities(tmp_path):
+def seeded(tmp_path):
     conn = connect(tmp_path / "layover.db")
     load_seed(conn)
+    hub = Hub(**dict(conn.execute("SELECT * FROM hub WHERE iata = 'DXB'").fetchone()))
     rows = load_activities(conn, "DXB")
     conn.close()
-    return rows
+    return rows, hub
 
 
 @pytest.fixture
-def dxb_plan(activities):
-    return fill(activities, "DXB", WINDOW_START, WINDOW_END, DUBAI)
+def activities(seeded):
+    return seeded[0]
+
+
+@pytest.fixture
+def dxb_hub(seeded):
+    return seeded[1]
+
+
+@pytest.fixture
+def dxb_plan(seeded):
+    activities, hub = seeded
+    return fill(activities, hub, WINDOW_START, WINDOW_END, DUBAI)
 
 
 def test_eight_dxb_activities_load(activities):
@@ -85,35 +98,70 @@ def test_dxb_plan_costs_what_its_items_cost(dxb_plan):
         "Dubai Museum",
         "Gold Souk",
     ]
-    assert dxb_plan.cost_eur == 1.25
+    assert dxb_plan.activities_cost_eur == 1.25
     assert dxb_plan.allocated_minutes == 221
 
 
-def test_a_night_window_gets_a_different_plan(activities):
+def test_a_night_window_gets_a_different_plan(activities, dxb_hub, dxb_plan):
     """The same hub at 23:55–05:15 can reach almost nothing — §5.4's case."""
     start = datetime(2026, 9, 1, 23, 55, tzinfo=DUBAI)
-    plan = fill(activities, "DXB", start, start + timedelta(minutes=320), DUBAI)
+    plan = fill(activities, dxb_hub, start, start + timedelta(minutes=320), DUBAI)
     assert all("Souk" not in a.name for a in plan.items)   # souks shut at 22:00
-    assert plan.cost_eur < dxb_plan_cost_for_daytime(activities)
+    assert plan.activities_cost_eur < dxb_plan.activities_cost_eur
 
 
-def dxb_plan_cost_for_daytime(activities):
-    return fill(activities, "DXB", WINDOW_START, WINDOW_END, DUBAI).cost_eur
-
-
-def test_empty_window_yields_an_empty_plan(activities):
+def test_empty_window_yields_an_empty_plan(activities, dxb_hub):
     """doh_150min's window is inverted; nothing should be scheduled into it."""
     start = datetime(2026, 9, 2, 1, 10, tzinfo=DUBAI)
     end = datetime(2026, 9, 1, 22, 20, tzinfo=DUBAI)
-    plan = fill(activities, "DXB", start, end, DUBAI)
+    plan = fill(activities, dxb_hub, start, end, DUBAI)
     assert plan.usable_minutes == 0
     assert plan.items == []
-    assert plan.cost_eur == 0
+    assert plan.activities_cost_eur == 0
 
 
-def test_plan_figures_are_derived_not_stored(activities):
+# --- §9 meals ---------------------------------------------------------------
+
+
+def test_the_worked_example_eats_lunch_and_only_lunch(dxb_plan):
+    """09:30–15:45 overlaps 12:00–14:00 and neither breakfast nor dinner."""
+    assert dxb_plan.meals == 1
+    assert dxb_plan.food_cost_eur == 8.00
+    assert dxb_plan.transfer_cost_eur == 4.00
+    assert dxb_plan.total_cost_eur == 13.25
+
+
+def test_a_night_window_buys_no_meals(activities, dxb_hub):
+    """ist_night_2200_1000's shape: 23:55–05:15 overlaps no mealtime at all.
+
+    A band-based lookup would have charged for meals during hours when nothing
+    is open — the error §5.4 exists to prevent, arriving through the kitchen.
+    """
+    start = datetime(2026, 9, 1, 23, 55, tzinfo=DUBAI)
+    plan = fill(activities, dxb_hub, start, start + timedelta(minutes=320), DUBAI)
+    assert plan.meals == 0
+    assert plan.food_cost_eur == 0
+
+
+def test_a_long_window_eats_more_than_once(activities, dxb_hub):
+    """08:00 to 20:00 catches breakfast, lunch and dinner."""
+    start = datetime(2026, 9, 1, 7, 0, tzinfo=DUBAI)
+    plan = fill(activities, dxb_hub, start, start + timedelta(hours=13), DUBAI)
+    assert plan.meals == 3
+    assert plan.food_cost_eur == 24.00
+
+
+def test_a_brush_past_a_mealtime_does_not_count(activities, dxb_hub):
+    """§9's 45-minute floor: arriving at 13:40 for lunch is not a meal."""
+    start = datetime(2026, 9, 1, 13, 40, tzinfo=DUBAI)
+    plan = fill(activities, dxb_hub, start, start + timedelta(hours=3), DUBAI)
+    assert plan.meals == 0
+
+
+def test_plan_figures_are_derived_not_stored(activities, dxb_hub):
     """Hard rule 7 — every figure on Plan comes off the window and the items."""
-    plan = Plan("DXB", WINDOW_START, WINDOW_END, activities[:2])
+    plan = Plan("DXB", WINDOW_START, WINDOW_END, DUBAI, activities[:2], 4.0, 8.0)
     assert plan.allocated_minutes == sum(a.time_cost_minutes for a in activities[:2])
-    assert plan.cost_eur == sum(a.cost_eur for a in activities[:2])
+    assert plan.activities_cost_eur == sum(a.cost_eur for a in activities[:2])
     assert plan.slack_minutes == plan.usable_minutes - plan.allocated_minutes
+    assert plan.total_cost_eur == 4.0 + plan.activities_cost_eur + plan.food_cost_eur

@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS hub (
     recheck_buffer_minutes  INTEGER NOT NULL,
     has_left_luggage        INTEGER NOT NULL,
     activity_density        REAL    NOT NULL,
+    meal_cost_eur           REAL    NOT NULL,
     verified_on             TEXT
 );
 

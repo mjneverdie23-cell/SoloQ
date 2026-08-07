@@ -28,6 +28,7 @@ HUB_COLUMNS = (
     "recheck_buffer_minutes",
     "has_left_luggage",
     "activity_density",
+    "meal_cost_eur",
     "verified_on",
 )
 

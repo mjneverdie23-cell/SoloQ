@@ -33,6 +33,7 @@ class Hub:
     recheck_buffer_minutes: int
     has_left_luggage: bool
     activity_density: float   # hand-scored opinion, not measurement
+    meal_cost_eur: float      # one budget meal here — editorial, same discipline
     verified_on: date | None
 
 

@@ -77,6 +77,7 @@ class Hub:                         # keyed on iata, FK to airport
     recheck_buffer_minutes: int    # required presence before onward departure
     has_left_luggage: bool
     activity_density: float        # 0.0-1.0, hand-scored editorial judgement
+    meal_cost_eur: float           # one budget meal here — editorial, see §9
     verified_on: date | None       # transfer/buffer times go stale — see §7
 
 @dataclass
@@ -109,10 +110,16 @@ class Plan:
     hub_iata: str
     window_start: datetime         # tz-aware, the §5.1 city window
     window_end: datetime
+    zone: ZoneInfo
     items: list[Activity]          # in visit order
+    transfer_cost_eur: float       # return trip to the centre
+    meal_cost_eur: float           # one budget meal at this hub
     usable_minutes: int            # @property, off the window
     allocated_minutes: int         # @property, activity time + transfers
-    cost_eur: float                # @property
+    meals: int                     # @property, MEAL_WINDOWS the window overlaps
+    activities_cost_eur: float     # @property
+    food_cost_eur: float           # @property, meals * meal_cost_eur
+    total_cost_eur: float          # @property, transfers + activities + food
     slack_minutes: int             # @property, usable - allocated
 
 # --- Fare data (fetched) ---
@@ -157,7 +164,7 @@ class Layover:
 class Comparison:
     itinerary_price_eur: float
     baseline_price_eur: float      # cheapest fast itinerary, same OD + dates
-    layover_plan_cost_eur: float   # transfers + activities + stay
+    layover_plan_cost_eur: float   # Plan.total_cost_eur — see §9
     itinerary_duration_minutes: int
     baseline_duration_minutes: int
     fare_saving_eur: float         # @property, baseline - itinerary
@@ -178,6 +185,13 @@ hard rule 6 violation: they are a recurring daily rule rather than an instant,
 resolved against a date in the hub's zone when the fill runs. `Plan`'s four
 figures are all derived from the window and the items, so they are properties
 (hard rule 7).
+
+The meal is counted in full even though the traveller would have eaten anyway,
+and airside food costs strictly more than a Deira shawarma. That makes the
+comparison conservative *against* the layover, which is the same direction every
+other rounding decision in this system takes. Counting it is what makes
+`net_saving_eur` defensible rather than merely honest: a number missing the
+largest cost of the day is a defect with a footnote, not a caveat.
 
 `Activity.interest` is not in §9's prose field list, but §9's fill sorts by
 "density of interest / time cost" and nothing else supplies it — the same defect

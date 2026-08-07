@@ -114,13 +114,18 @@ def test_headline_hours_match_usable_minutes():
 def test_money_figures_are_the_fixture_arithmetic():
     fare_saving = FIXTURE["baseline_price_eur"] - FIXTURE["price_eur"]
     assert money("Fare saved") == fare_saving
-    assert money("Metro + admissions") == FIXTURE["layover_plan_cost_eur"]
     assert money("Net") == fare_saving - FIXTURE["layover_plan_cost_eur"]
 
 
-def test_footer_admits_food_is_not_counted():
-    """€5.25 for a day would mislead without it. The model has no meal line."""
-    assert "no food, which the model does not yet carry" in PAGE
+def test_plan_cost_is_broken_out_never_folded():
+    """A single €13.25 is not legible; three lines are."""
+    parts = money("Metro") + money("Admissions") + money("One meal")
+    assert parts == FIXTURE["layover_plan_cost_eur"]
+
+
+def test_footer_says_the_meal_leans_against_the_layover():
+    """Counting it in full is what makes the number defensible, not just honest."""
+    assert "counted in full even though you would" in PAGE
 
 
 def test_footer_names_the_placeholder_fares():
