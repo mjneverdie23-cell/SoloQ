@@ -302,3 +302,63 @@ def test_ist_night_window_reaches_nothing(ist):
     plan = fill(*ist, *window_of("ist_night_2200_1000"), ISTANBUL)
     assert plan.items == []
     assert plan.band == "NO_EXIT"
+
+
+QATAR = ZoneInfo("Asia/Qatar")
+# doh_150min is the only DOH fixture and its window is inverted, so there is no
+# computed window to fill. A representative daytime one stands in: 09:00–15:00
+# local, 360 minutes, the HALF_DAY a real Doha stopover would land in.
+DOH_WINDOW = (
+    datetime(2026, 9, 1, 9, 0, tzinfo=QATAR),
+    datetime(2026, 9, 1, 15, 0, tzinfo=QATAR),
+)
+
+
+@pytest.fixture
+def doh(tmp_path):
+    return hub_and_rows(tmp_path, "DOH")
+
+
+@pytest.fixture
+def doh_plan(doh):
+    return fill(*doh, *DOH_WINDOW, QATAR)
+
+
+def test_eight_doh_activities_load(doh):
+    rows, _ = doh
+    assert len(rows) == 8
+    assert all(a.hub_iata == "DOH" and a.verified_on is None for a in rows)
+
+
+def test_doh_plan_over_a_representative_daytime_window(doh_plan):
+    """53 + 63 + 95 = 211 of a 288-minute budget. Every stop that fits is free."""
+    assert [a.name for a in doh_plan.items] == [
+        "Corniche promenade walk",
+        "Msheireb Museums",
+        "Souq Waqif",
+    ]
+    assert doh_plan.usable_minutes == 360
+    assert doh_plan.allocated_minutes == 211
+    assert doh_plan.slack_minutes == 149
+    assert doh_plan.activities_cost_eur == 0.00
+    assert doh_plan.total_cost_eur == 7.10       # 1.10 metro + 0.00 + 6.00 meal
+
+
+def test_doh_excludes_the_sunset_dhow(doh, doh_plan):
+    """The excluded row: the dhow leaves at 17:00 and the window shuts at 15:00.
+
+    It out-ranks two stops that were taken, so only the opening-hours filter
+    keeps it out.
+    """
+    rows, _ = doh
+    dhow = next(a for a in rows if "Dhow cruise" in a.name)
+    assert dhow.opens_local == time(17, 0)
+    assert is_open_during(dhow, *DOH_WINDOW, QATAR) is False
+    assert dhow not in doh_plan.items
+
+
+def test_doh_fixture_window_is_inverted_and_plans_nothing(doh):
+    """doh_150min: the deductions outrun the layover, so there is no window."""
+    plan = fill(*doh, *window_of("doh_150min"), QATAR)
+    assert plan.usable_minutes == 0
+    assert plan.items == []
