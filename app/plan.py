@@ -4,6 +4,7 @@ Curated rows and a greedy fill. No LLM and no live API: curated rows are
 testable and generated ones are not.
 """
 
+import json
 import sqlite3
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
@@ -37,6 +38,7 @@ def load_activities(conn: sqlite3.Connection, hub_iata: str) -> list[Activity]:
                 **dict(row),
                 "opens_local": time.fromisoformat(row["opens_local"]),
                 "closes_local": time.fromisoformat(row["closes_local"]),
+                "closed_weekdays": tuple(json.loads(row["closed_weekdays"])),
                 "verified_on": (
                     date.fromisoformat(row["verified_on"]) if row["verified_on"] else None
                 ),
@@ -121,17 +123,37 @@ class Plan:
 
 
 def is_open_during(activity: Activity, start: datetime, end: datetime, zone: ZoneInfo) -> bool:
-    """Does the venue's daily window intersect the city window at all?
+    """Does the venue open at all inside the city window?
 
-    The clock rule is resolved against each local date the window touches, in
-    the hub's zone — the same reason §5.4 needs a zone rather than an offset.
+    Both rules are resolved against each *local* date the window touches, in the
+    hub's zone. That matters for the weekly closure: a window crossing local
+    midnight spans two weekdays — RIX's 13:07–07:50 does exactly that — so the
+    weekday must come from the local date rather than the departure date.
+
+    A row shut on either day the window touches is dropped outright. That is
+    conservative, and it makes the overnight case right for free: better a
+    sightseeing hour lost than a traveller sent to a locked door.
     """
+    if closed_on_a_day_the_window_touches(activity, start, end, zone):
+        return False
     day = start.astimezone(zone).date()
     last = end.astimezone(zone).date()
     while day <= last:
         opens = datetime.combine(day, activity.opens_local, tzinfo=zone)
         closes = datetime.combine(day, activity.closes_local, tzinfo=zone)
         if min(end, closes) > max(start, opens):
+            return True
+        day += timedelta(days=1)
+    return False
+
+
+def closed_on_a_day_the_window_touches(
+    activity: Activity, start: datetime, end: datetime, zone: ZoneInfo
+) -> bool:
+    day = start.astimezone(zone).date()
+    last = end.astimezone(zone).date()
+    while day <= last:
+        if day.isoweekday() in activity.closed_weekdays:
             return True
         day += timedelta(days=1)
     return False

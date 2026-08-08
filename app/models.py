@@ -62,6 +62,10 @@ class Activity:
     # `datetime` — hard rule 6 is about instants.
     opens_local: time
     closes_local: time
+    # ISO weekday, 1=Mon .. 7=Sun. [] is a claim that the row opens daily, not
+    # a default for one nobody checked.
+    closed_weekdays: tuple[int, ...]
+    confidence: str            # "stated" | "estimated" — estimated renders with ~
     transfer_minutes_from_centre: int
     verified_on: date | None
 

@@ -43,6 +43,8 @@ ACTIVITY_COLUMNS = (
     "cost_eur",
     "opens_local",
     "closes_local",
+    "closed_weekdays",
+    "confidence",
     "transfer_minutes_from_centre",
     "verified_on",
 )
@@ -87,7 +89,12 @@ def load_seed(conn: sqlite3.Connection, seed_path: Path = SEED_PATH) -> None:
     _insert(conn, "airport", AIRPORT_COLUMNS, seed["airports"])
     _insert(conn, "hub", HUB_COLUMNS, seed["hubs"])
     _insert(conn, "entry_rule", ENTRY_RULE_COLUMNS, seed["entry_rules"])
-    _insert(conn, "activity", ACTIVITY_COLUMNS, seed["activities"])
+    _insert(
+        conn,
+        "activity",
+        ACTIVITY_COLUMNS,
+        [{**a, "closed_weekdays": json.dumps(a["closed_weekdays"])} for a in seed["activities"]],
+    )
     conn.commit()
 
 

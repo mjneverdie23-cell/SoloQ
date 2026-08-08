@@ -403,32 +403,49 @@ def test_eight_auh_activities_load(auh):
 
 
 def test_auh_plan_over_a_representative_daytime_window(auh_plan):
-    """55 + 65 + 80 + 115 = 315 of a 336-minute budget. The mosque only just fits."""
+    """A Tuesday: nothing is shut, so every exclusion here is budget."""
     assert [a.name for a in auh_plan.items] == [
+        "Observation Deck at 300, Etihad Towers",
         "Corniche beach walk",
         "Mina Zayed date and fish market",
         "Qasr Al Hosn",
-        "Sheikh Zayed Grand Mosque",
+        "Heritage Village",
     ]
     assert auh_plan.usable_minutes == 420
-    assert auh_plan.allocated_minutes == 315
-    assert auh_plan.slack_minutes == 105
-    assert auh_plan.activities_cost_eur == 8.00
-    assert auh_plan.total_cost_eur == 18.00      # 2.00 bus + 8.00 + 8.00 meal
+    assert auh_plan.allocated_minutes == 332
+    assert auh_plan.slack_minutes == 88
+    assert auh_plan.activities_cost_eur == 26.00
+    assert auh_plan.total_cost_eur == 36.00      # 2.00 bus + 26.00 + 8.00 meal
 
 
-def test_auh_excludes_the_sunset_dhow(auh, auh_plan):
-    """The excluded row: it sails at 18:00 and the window shuts at 16:00.
+def test_auh_excludes_the_louvre_on_a_monday(auh):
+    """AUH's excluded row is a weekly closure, not an evening opening.
 
-    It out-ranks three stops the fill took, so it would have been second on the
-    list had it been open. Only the opening-hours filter drops it.
+    Louvre Abu Dhabi is shut on Mondays. On a Monday window it drops out even
+    though it fits the budget and outranks two rows that are taken, so the
+    weekday filter is the only thing keeping it out.
     """
-    rows, _ = auh
-    dhow = next(a for a in rows if "dhow cruise" in a.name)
-    assert dhow.opens_local == time(18, 0)
-    assert is_open_during(dhow, *AUH_WINDOW, DUBAI) is False
-    assert dhow not in auh_plan.items
-    assert dhow.interest_density > min(a.interest_density for a in auh_plan.items)
+    rows, hub = auh
+    louvre = next(a for a in rows if "Louvre" in a.name)
+    assert louvre.closed_weekdays == (1,)
+
+    # Roomy on purpose. The fill sorts by interest per minute, so a 140-minute
+    # museum never out-ranks short walks — at a tight window budget removes it
+    # first and a closure assertion would prove nothing. Same trap as the IST
+    # ferry.
+    monday = (
+        datetime(2026, 8, 31, 6, 0, tzinfo=DUBAI),      # a Monday
+        datetime(2026, 8, 31, 20, 0, tzinfo=DUBAI),
+    )
+    assert monday[0].isoweekday() == 1
+    plan = fill(rows, hub, *monday, DUBAI)
+    assert louvre not in plan.items
+    assert plan.allocated_minutes + louvre.time_cost_minutes <= int(
+        plan.usable_minutes * ALLOCATION_CEILING
+    )
+
+    tuesday = (monday[0] + timedelta(days=1), monday[1] + timedelta(days=1))
+    assert louvre in fill(rows, hub, *tuesday, DUBAI).items
 
 
 WARSAW = ZoneInfo("Europe/Warsaw")
@@ -470,19 +487,51 @@ def test_waw_plan_over_the_inbound_window(waw_plan):
     assert waw_plan.total_cost_eur == 23.20      # 2.20 train + 14.00 + 7.00 meal
 
 
-def test_waw_excludes_the_evening_chopin_recital(waw, waw_plan):
-    """The excluded row: the recital starts at 18:30, an hour and a half after
-    the traveller has to be back at Chopin airport.
+def test_waw_excludes_two_museums_shut_on_a_tuesday(waw, waw_plan):
+    """waw_inbound_bkk_osl lands on a Tuesday, and Warsaw shuts museums then.
 
-    It out-ranks the Royal Castle, which was taken with room to spare, so the
-    opening-hours filter is the only thing keeping it out.
+    Asserted at a roomy Tuesday window rather than the fixture's, for the same
+    reason as AUH: both museums are long, so at the fixture window budget
+    removes them before the weekday filter is consulted and the assertion would
+    be vacuous. Given room, the closure is the only thing keeping them out —
+    the identical window on Wednesday takes them.
     """
+    rows, hub = waw
+    assert WAW_WINDOW[0].isoweekday() == 2
+    museums = ("POLIN Museum of Polish Jews", "Warsaw Uprising Museum")
+    for name in museums:
+        assert next(a for a in rows if a.name == name).closed_weekdays == (2,)
+        assert name not in [a.name for a in waw_plan.items]
+
+    tuesday = (
+        datetime(2026, 9, 1, 7, 0, tzinfo=WARSAW),
+        datetime(2026, 9, 1, 19, 0, tzinfo=WARSAW),
+    )
+    shut = fill(rows, hub, *tuesday, WARSAW)
+    assert all(name not in [a.name for a in shut.items] for name in museums)
+
+    # The Uprising Museum is the one that carries the proof: it fits the
+    # Tuesday budget with room to spare and still does not appear, and the
+    # identical Wednesday window takes it. POLIN stays out on Wednesday too,
+    # but on budget — the museum above it in density order eats the room.
+    uprising = next(a for a in rows if a.name == museums[1])
+    assert shut.allocated_minutes + uprising.time_cost_minutes <= int(
+        shut.usable_minutes * ALLOCATION_CEILING
+    )
+    wednesday = (tuesday[0] + timedelta(days=1), tuesday[1] + timedelta(days=1))
+    assert museums[1] in [a.name for a in fill(rows, hub, *wednesday, WARSAW).items]
+
+
+def test_waw_evening_fountain_show_is_shut_by_the_clock_too(waw):
+    """A Saturday, when the show does run, and still outside a daytime window."""
     rows, _ = waw
-    recital = next(a for a in rows if "Chopin recital" in a.name)
-    assert recital.opens_local == time(18, 30)
-    assert is_open_during(recital, *WAW_WINDOW, WARSAW) is False
-    assert recital not in waw_plan.items
-    assert recital.interest_density > min(a.interest_density for a in waw_plan.items)
+    show = next(a for a in rows if "Fountain Park" in a.name)
+    saturday = (
+        datetime(2026, 9, 5, 9, 10, tzinfo=WARSAW),
+        datetime(2026, 9, 5, 16, 50, tzinfo=WARSAW),
+    )
+    assert saturday[0].isoweekday() == 6 and 6 not in show.closed_weekdays
+    assert is_open_during(show, *saturday, WARSAW) is False
 
 
 RIGA = ZoneInfo("Europe/Riga")
@@ -527,18 +576,18 @@ def test_rix_plan_over_the_overnight_window(rix_plan):
     assert rix_plan.total_cost_eur == 76.00      # 3.00 bus + 24.00 + 24.00 + 25.00 bed
 
 
-def test_rix_excludes_the_11am_walking_tour(rix, rix_plan):
-    """The excluded row, and the only one of the six not excluded by an evening
-    opening: a tour that leaves at 11:00 daily.
+def test_rix_excludes_the_noon_organ_programme(rix, rix_plan):
+    """The excluded row, and the only one not excluded by an evening opening.
 
-    The window opens at 13:07, two hours after that day's departure, and closes
-    at 07:50 the next morning, three hours before the following one. A fixed
-    daily departure is exactly the recurring clock rule opens_local models, and
-    it is the one shape a long overnight window can still miss.
+    Riga Cathedral's organ programme runs at noon. The window opens at 13:07,
+    an hour after that day's, and closes at 07:50 the next morning, four hours
+    before the following one. A fixed daily slot is the one shape a long
+    overnight window can still miss — an evening opener could not, because this
+    window covers every evening hour.
     """
     rows, _ = rix
-    tour = next(a for a in rows if "walking tour" in a.name)
-    assert (tour.opens_local, tour.closes_local) == (time(11, 0), time(13, 0))
+    tour = next(a for a in rows if "organ programme" in a.name)
+    assert (tour.opens_local, tour.closes_local) == (time(12, 0), time(12, 25))
     assert is_open_during(tour, *RIX_WINDOW, RIGA) is False
     assert tour not in rix_plan.items
     # Nothing to do with the budget: 514 minutes of slack were left unspent.

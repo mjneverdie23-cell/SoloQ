@@ -103,6 +103,8 @@ class Activity:
     cost_eur: float
     opens_local: time              # a daily clock rule, not an instant
     closes_local: time
+    closed_weekdays: list[int]     # ISO weekday, 1=Mon..7=Sun. [] = opens daily
+    confidence: str                # "stated" | "estimated" — see §9
     transfer_minutes_from_centre: int
     verified_on: date | None       # opening hours go stale — see §7
 

@@ -42,6 +42,8 @@ CREATE TABLE IF NOT EXISTS activity (
     cost_eur                     REAL    NOT NULL,
     opens_local                  TEXT    NOT NULL,
     closes_local                 TEXT    NOT NULL,
+    closed_weekdays              TEXT    NOT NULL,
+    confidence                   TEXT    NOT NULL,
     transfer_minutes_from_centre INTEGER NOT NULL,
     verified_on                  TEXT,
     PRIMARY KEY (hub_iata, name)
