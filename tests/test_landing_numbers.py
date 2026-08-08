@@ -123,6 +123,21 @@ def test_plan_cost_is_broken_out_never_folded():
     assert parts == FIXTURE["layover_plan_cost_eur"]
 
 
+def test_estimated_prices_render_with_a_tilde():
+    """§9: a guess displayed as an exact figure wears precision it has not earned."""
+    import json as _json
+
+    seed = _json.loads((ROOT / "hubs.seed.json").read_text())
+    named = {"Dubai Museum, Al Fahidi Fort", "Abra across Dubai Creek",
+             "Spice Souk, Deira", "Gold Souk, Deira"}
+    for row in seed["activities"]:
+        if row["hub_iata"] != "DXB" or row["name"] not in named or row["cost_eur"] == 0:
+            continue
+        rendered = f"~€{row['cost_eur']:.2f}" if row["confidence"] == "estimated" \
+            else f"€{row['cost_eur']:.2f}"
+        assert rendered in PAGE, f"{row['name']} should render as {rendered}"
+
+
 def test_footer_says_the_meal_leans_against_the_layover():
     """Counting it in full is what makes the number defensible, not just honest."""
     assert "counted in full even though you would" in PAGE

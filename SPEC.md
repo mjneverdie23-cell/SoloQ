@@ -218,11 +218,27 @@ other rounding decision in this system takes. Counting it is what makes
 `net_saving_eur` defensible rather than merely honest: a number missing the
 largest cost of the day is a defect with a footnote, not a caveat.
 
+**v0 ignores geography, and `lat`/`lon` are seeded for v1.** Nothing reads
+them: the fill sorts by interest per minute and visits in that order, so an
+Istanbul plan runs Taksim → Sultanahmet → Sultanahmet rather than by route, and
+each activity pays `transfer_minutes_from_centre` in full even when the last one
+was next door. That is prose-without-a-field's mirror image — a field with no
+consumer — and hard rule 9 asks for the same decision either way: declare the
+limitation or delete the fields. They stay, because ordering by route needs
+inter-activity travel times, which needs a distance matrix, which is a routing
+problem and a real feature. The cost of getting it wrong is a metro ride, not a
+locked door, and §9's 20% slack absorbs it. v1.
+
 `Activity.interest` is not in §9's prose field list, but §9's fill sorts by
 "density of interest / time cost" and nothing else supplies it — the same defect
 as the `terminal_change` penalty that had no field to read. It is declared here,
 and like `hub.activity_density` it is editorial judgement rather than
 measurement.
+
+`Activity.confidence` is `"stated"` or `"estimated"`. An estimated price renders
+with a tilde. A €30 guess displayed as €30 is the same defect as a plan cost
+that quietly omitted meals — the number is not wrong so much as wearing a
+precision it has not earned.
 
 A hub is an airport with extra operational data. `city`, `country_iso2` and
 `is_schengen` are airport facts and live only on `Airport` — duplicating them on
