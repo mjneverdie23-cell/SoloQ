@@ -123,9 +123,11 @@ class Plan:
     meals: int                     # @property, MEAL_WINDOWS the window overlaps
     activities_cost_eur: float     # @property
     food_cost_eur: float           # @property, meals * meal_cost_eur
+    plannable_window: tuple        # @property, waking part of the window (§9)
+    plannable_minutes: int         # @property
     stay_cost_eur: float           # @property, a bed when the band requires one
     total_cost_eur: float          # @property, transfers + activities + food + stay
-    slack_minutes: int             # @property, usable - allocated
+    slack_minutes: int             # @property, plannable - allocated
 
 # --- Fare data (fetched) ---
 
@@ -190,6 +192,17 @@ hard rule 6 violation: they are a recurring daily rule rather than an instant,
 resolved against a date in the hub's zone when the fill runs. `Plan`'s four
 figures are all derived from the window and the items, so they are properties
 (hard rule 7).
+
+An `OVERNIGHT` window contains a night and the traveller sleeps through it.
+Paying for the bed did not stop the fill offering 898 minutes of sightseeing
+inside one, which is the meal defect a third time: a non-discretionary need with
+nothing modelling it. In an `OVERNIGHT` band the *plannable* window is clipped
+to the first local 08:00–22:00 block the city window touches, then capped at
+`PLANNABLE_CEILING_MINUTES = 840`. The city window itself is untouched, so
+`usable_minutes`, the meal count and the bed all still see the real layover —
+only what a plan may fill is reduced. The 14-hour band and the 840-minute
+ceiling agree by construction; the ceiling is there for a window spanning more
+than one day's waking block.
 
 A bed is triggered by the **band**, not by window overlap, and the difference
 from meals is deliberate. Mealtimes are recurring daily bands, so intersecting

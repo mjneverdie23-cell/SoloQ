@@ -180,7 +180,7 @@ def test_a_half_day_buys_no_bed(dxb_plan):
 
 
 def test_an_overnight_band_buys_a_bed(tmp_path):
-    """RIX 23h: OVERNIGHT, three meals and a bed — 3 + 24 + 24 + 25 = 76."""
+    """RIX 23h: OVERNIGHT, three meals and a bed — 3 + 21 + 24 + 25 = 73."""
     from app.models import Hub
 
     conn = connect(tmp_path / "layover.db")
@@ -197,7 +197,7 @@ def test_an_overnight_band_buys_a_bed(tmp_path):
     assert plan.band == "OVERNIGHT"
     assert plan.stay_cost_eur == 25.00
     assert plan.meals == 3
-    assert plan.total_cost_eur == 76.00
+    assert plan.total_cost_eur == 73.00
 
 
 def test_a_night_arrival_also_buys_a_bed(activities, dxb_hub):
@@ -554,12 +554,16 @@ def test_eight_rix_activities_load(rix):
     assert all(a.hub_iata == "RIX" and a.verified_on is None for a in rows)
 
 
-def test_rix_plan_over_the_overnight_window(rix_plan):
-    """13:07 to 07:50 next day, 1123 usable: seven stops and Jurmala still fit.
+def test_rix_plan_stops_at_bedtime(rix_plan):
+    """13:07 to 07:50 next day is 1123 usable minutes, but you sleep in it.
 
-    Riga is small enough that an 898-minute budget runs out of city before it
-    runs out of minutes — 609 allocated, 514 slack, well past the 20% floor.
+    The plannable window is clipped to the waking part — 13:07 to 22:00, 533
+    minutes — so the fill offers an evening in Riga rather than 898 minutes of
+    sightseeing spanning a night. Jurmala is the casualty: a 215-minute beach
+    trip no longer fits, which is correct.
     """
+    assert rix_plan.usable_minutes == 1123          # the city window is untouched
+    assert rix_plan.plannable_minutes == 533
     assert [a.name for a in rix_plan.items] == [
         "St Peter's Church tower",
         "House of the Blackheads",
@@ -567,13 +571,30 @@ def test_rix_plan_over_the_overnight_window(rix_plan):
         "Riga Central Market",
         "Vecriga old town walk",
         "Museum of the Occupation of Latvia",
-        "Jurmala beach by train",
     ]
-    assert rix_plan.usable_minutes == 1123
-    assert rix_plan.allocated_minutes == 609
-    assert rix_plan.slack_minutes == 514
-    assert rix_plan.activities_cost_eur == 24.00
-    assert rix_plan.total_cost_eur == 76.00      # 3.00 bus + 24.00 + 24.00 + 25.00 bed
+    assert "Jurmala beach by train" not in [a.name for a in rix_plan.items]
+    assert rix_plan.allocated_minutes == 394
+    assert rix_plan.slack_minutes == 139
+    assert rix_plan.activities_cost_eur == 21.00
+    assert rix_plan.total_cost_eur == 73.00      # 3.00 bus + 21.00 + 24.00 + 25.00 bed
+
+
+def test_the_ceiling_only_binds_on_overnight_bands(activities, dxb_hub, dxb_plan):
+    """A HALF_DAY plan sees its whole window; nothing is clipped."""
+    assert dxb_plan.band == "HALF_DAY"
+    assert dxb_plan.plannable_window == (dxb_plan.window_start, dxb_plan.window_end)
+    assert dxb_plan.plannable_minutes == dxb_plan.usable_minutes
+
+
+def test_the_ceiling_caps_at_fourteen_hours(activities, dxb_hub):
+    """A window whose waking part exceeds 840 minutes is cut to 840."""
+    from app.plan import PLANNABLE_CEILING_MINUTES
+
+    start = datetime(2026, 9, 1, 6, 0, tzinfo=DUBAI)
+    plan = fill(activities, dxb_hub, start, start + timedelta(hours=30), DUBAI)
+    assert plan.band in ("OVERNIGHT", "OVERNIGHT_NIGHT_ARRIVAL")
+    assert plan.plannable_minutes == PLANNABLE_CEILING_MINUTES
+    assert plan.plannable_minutes < plan.usable_minutes
 
 
 def test_rix_excludes_the_noon_organ_programme(rix, rix_plan):
